@@ -3,10 +3,14 @@ def main():
   import pygame
   pygame.init()
   from pygame import draw, Surface
+  from pygame.draw import aaline
   from pygame.gfxdraw import box, filled_circle
   from pygame.sprite import RenderUpdates, Sprite
   Clock = pygame.time.Clock()
 
+  import itertools
+  import math
+  from numpy import array
   import random
   import sys
 
@@ -35,8 +39,31 @@ def main():
       self.rect.center = position
     def move_random(self, space):
       self.move(random_2d(space))
+    def center(self):
+      return self.rect.center
+
+  def normalized(v):
+    return array(v) / math.sqrt(sum(map(lambda x: x**2, v)))
+
+  def normal(v):
+    rotation = array([[0, -1], [1, 0]])
+    return normalized(rotation.dot(array(v)))
+
+  class Edge:
+    def __init__(self, vertices, thickness=5):
+      print(vertices)
+      self.thickness = thickness
+      self.vertices = vertices
+    def draw(self, surface):
+      v = map(lambda v: array(v.center()), self.vertices)
+      aaline(surface, (200, 200, 200), v[0], v[1])
+      n = normal(v[0] - v[1])
+      for o in [2, -2, 4, -4]:
+        aaline(surface, (200, 200, 200), v[0] + o*n, v[1] + o*n)
 
   vertices = RenderUpdates(*[ Vertex() for i in xrange(50) ])
+
+  edges = [ Edge(tuple(itertools.islice(vertices, 2))) ]
 
   def random_2d(space):
     return tuple([ space[i] + random.random() * space[i+2] for i in xrange(2) ])
@@ -49,13 +76,27 @@ def main():
 
   background = Surface(screen.get_size()).convert()
   background.fill((100, 120, 150))
-  screen.blit(background, (0, 0))
+
+  def bg():
+    screen.blit(background, (0, 0))
 
   shuffle_vertices(screen)
-  pygame.display.flip()
+
+  dirty = True
 
   while True:
+
+    if dirty:
+      bg()
+      for e in edges:
+        e.draw(screen)
+
     pygame.display.update(vertices.draw(screen))
+
+    if dirty:
+      pygame.display.flip()
+
+    dirty = False
 
     for event in pygame.event.get():
       if event.type == pygame.QUIT:
