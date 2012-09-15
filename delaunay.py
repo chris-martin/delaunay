@@ -5,7 +5,7 @@ def main():
   from pygame import draw, Surface
   from pygame.draw import aaline
   from pygame.gfxdraw import box, filled_circle
-  from pygame.sprite import RenderUpdates, Sprite
+  from pygame.sprite import Group, Sprite
   Clock = pygame.time.Clock()
 
   import itertools
@@ -17,8 +17,10 @@ def main():
   screen = pygame.display.set_mode((800, 600))
 
   class Vertex(Sprite):
+
     def __init__(self, size=10, round=8):
       Sprite.__init__(self)
+      self.adj = []
       background = (255, 0, 255)
       pad = 2
       self.image = i = Surface((2*size+2*pad, 2*size+2*pad))
@@ -35,10 +37,13 @@ def main():
       circ(size, round, pad, (0, 0, 0))
       circ(size-1, round-1, pad+1, (255, 255, 255))
       self.rect = i.get_rect()
+
     def move(self, position):
       self.rect.center = position
+
     def move_random(self, space):
       self.move(random_2d(space))
+
     def center(self):
       return self.rect.center
 
@@ -50,10 +55,13 @@ def main():
     return normalized(rotation.dot(array(v)))
 
   class Edge:
-    def __init__(self, vertices, thickness=5):
+
+    def __init__(self, vertices):
       print(vertices)
-      self.thickness = thickness
-      self.vertices = vertices
+      v = self.vertices = vertices
+      for i in xrange(2):
+        v[i].adj.append(v[(i + 1)%2])
+
     def draw(self, surface):
       v = map(lambda v: array(v.center()), self.vertices)
       aaline(surface, (200, 200, 200), v[0], v[1])
@@ -61,9 +69,25 @@ def main():
       for o in [2, -2, 4, -4]:
         aaline(surface, (200, 200, 200), v[0] + o*n, v[1] + o*n)
 
-  vertices = RenderUpdates(*[ Vertex() for i in xrange(50) ])
+  class Triangle:
 
-  edges = [ Edge(tuple(itertools.islice(vertices, 2))) ]
+    def __init__(self, vertices):
+      cs = self.corners = map(lambda v: Corner(self, v), vertices)
+      for i in xrange(3):
+        cs[i].next = cs[(i+1) % 3]
+        cs[i].prev = cs[(i+2) % 3]
+
+  class Corner:
+
+    def __init__(self, triangle, vertex):
+      self.triangle = triangle
+      self.vertex = vertex
+      self.next = self.prev = self.swing = self.unswing = None
+
+  vertices = Group(*[ Vertex() for i in xrange(50) ])
+
+  edges = []
+  # Edge(tuple(itertools.islice(vertices, 2)))
 
   def random_2d(space):
     return tuple([ space[i] + random.random() * space[i+2] for i in xrange(2) ])
@@ -74,29 +98,39 @@ def main():
       p = 25
       v.move(random_2d((p, p, s[0]-2*p, s[1]-2*p)))
 
+  shuffle_vertices(screen)
+
+  def angle(vec):
+    n = normalized(vec)
+    return math.atan(-1 * n[1] / n[0]) % (2*math.pi)
+
+  def first_edge():
+    a = max(vertices, key=lambda v: v.center()[1])
+    b = min(vertices, key=lambda v: angle(array(v.center())-array(a.center())))
+    print(angle(array(b.center())-array(a.center())))
+    return Edge((a,b))
+
+  edges.append(first_edge())
+
   background = Surface(screen.get_size()).convert()
   background.fill((100, 120, 150))
 
   def bg():
     screen.blit(background, (0, 0))
 
-  shuffle_vertices(screen)
-
   dirty = True
 
   while True:
+
+    Clock.tick(20)
 
     if dirty:
       bg()
       for e in edges:
         e.draw(screen)
-
-    pygame.display.update(vertices.draw(screen))
-
-    if dirty:
+      vertices.draw(screen)
       pygame.display.flip()
-
-    dirty = False
+      dirty = False
 
     for event in pygame.event.get():
       if event.type == pygame.QUIT:
