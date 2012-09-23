@@ -12,6 +12,8 @@ from numpy import array
 import random
 import sys
 
+from geometry import vec, line
+
 class Vertex(Sprite):
 
   def __init__(self, size=10, round=8):
@@ -35,106 +37,28 @@ class Vertex(Sprite):
     self.rect = i.get_rect()
 
   def move(self, position):
-    self.rect.center = position
+    self.rect.center = tuple(position)
 
   def move_random(self, space):
     self.move(random_2d(space))
 
   def center(self):
-    return self.rect.center
-
-def normalized(vec):
-  return array(vec) / math.sqrt(sum(map(lambda x: x**2, vec)))
-
-def normal(vec):
-  rotation = array([[0, -1], [1, 0]])
-  return normalized(rotation.dot(array(vec)))
-
-"""
-  q: 2 (point, direction vector)-tuples
-  return: the lines' intersection point
-  http://en.wikipedia.org/wiki/Line-line_intersection
-"""
-def line_intersect(*q):
-  (x1, y1) = p1 = q[0][0]
-  (x2, y2) = p2 = tuple(array(p1)+array(q[0][1]))
-  (x3, y3) = p3 = q[1][0]
-  (x4, y4) = p4 = tuple(array(p3)+array(q[1][1]))
-  d = (x1-x2)*(y3-y4)-(y1-y2)*(x3-x4)
-  return (
-    ( (x1*y2-y1*x2)*(x3-x4)-(x1-x2)*(x3*y4-y3*x4) ) / d,
-    ( (x1*y2-y1*x2)*(y3-y4)-(y1-y2)*(x3*y4-y3*x4) ) / d,
-  )
-
-def sign(x):
-  return math.copysign(1, x)
-
-def angle(vec):
-  n = normalized(vec)
-  if n[0] == 0: return math.pi/2
-  return math.atan(-1 * n[1] / n[0]) % (2*math.pi)
-
-"""
-  line: (point, direction)
-  circle: (center, radius)
-  s: vector pointing in the general direction of the
-     desired intersection point
-  return: the intersection point in the direction along
-          the line most similar to the direction of s
-  http://mathworld.wolfram.com/Circle-LineIntersection.html
-"""
-def line_circle_intersect(line, circle, s):
-  r = circle[1]
-  p1 = tuple(array(line[0]) - circle[0])
-  p2 = tuple(array(p1) + array(line[1]))
-  dx = p2[0] - p1[0]
-  dy = p2[1] - p1[1]
-  dr = math.sqrt(dx**2+dy**2)
-  D = p1[0]*p2[1] - p2[0]*p1[1]
-  q = math.sqrt(r**2 * dr**2 - D**2)
-  I = tuple(map(
-    lambda x: tuple(array(x)/dr**2 + array(circle[0])),
-    ( (D*dy+sign(dy)*dx*q, 0-D*dx+abs(dy)*q),
-      (D*dy-sign(dy)*dx*q, 0-D*dx-abs(dy)*q), )
-  ))
-  print(I)
-  def angle_diff(i):
-    d = angle(s) - angle(tuple(array(i)-array(line[0])))
-    print(d)
-    d = d % (2 * math.pi)
-    if d > math.pi: d = math.pi - d
-    print(d)
-    return d
-  return min(I, key=angle_diff)
+    return vec(self.rect.center)
 
 class Edge:
 
   def __init__(self, *vertices):
-    print(vertices)
+    if vertices[0] == vertices[1]:
+      raise ValueError
     v = self.vertices = vertices
+    self.line = line(map(lambda v: v.center(), vertices))
 
   def draw(self, surface):
-    v = map(lambda v: array(v.center()), self.vertices)
-    aaline(surface, (200, 200, 200), v[0], v[1])
-    n = normal(v[0] - v[1])
+    v = map(lambda v: v.center(), self.vertices)
+    aaline(surface, (200, 200, 200), tuple(v[0]), tuple(v[1]))
+    n = (v[0] - v[1]).rotate(math.pi/2).unit()
     for o in [2, -2, 4, -4]:
-      aaline(surface, (200, 200, 200), v[0] + o*n, v[1] + o*n)
-
-  def np_points(self):
-    return map(lambda v: array(v.center()), self.vertices)
-
-  # vector pointing from v0 to v1
-  def direction(self):
-    p = self.np_points()
-    return tuple(p[1] - p[0])
-
-  # point at the center of the line segment
-  def center(self):
-    return tuple(sum(self.np_points()) / 2.)
-
-  # (center point, normal direction)
-  def normal(self):
-    return (self.center(), normalized(self.direction()))
+      aaline(surface, (200, 200, 200), tuple(v[0] + o*n), tuple(v[1] + o*n))
 
 class Triangle:
 
@@ -160,7 +84,7 @@ def main():
   edges = []
 
   def random_2d(space):
-    return tuple([ space[i] + random.random() * space[i+2] for i in xrange(2) ])
+    return vec([ space[i] + random.random() * space[i+2] for i in xrange(2) ])
 
   def shuffle_vertices(space):
     for v in vertices.sprites():
@@ -171,9 +95,8 @@ def main():
   shuffle_vertices(screen)
 
   def first_edge():
-    a = max(vertices, key=lambda v: v.center()[1])
-    b = min(vertices, key=lambda v: angle(array(v.center())-array(a.center())))
-    print(angle(array(b.center())-array(a.center())))
+    a = min(vertices, key=lambda v: v.center().y())
+    b = min(vertices, key=lambda v: (v.center()-a.center()).ang())
     return Edge(a,b)
 
   def add_edge(e):
@@ -188,20 +111,12 @@ def main():
 
   def first_vertex():
     e = edges[0]
-    n = e.normal()
-    ev = e.vertices[0]
-
-    """
-      The distance, along the line normal to the edge,
-      from the edge to the circle.
-    """
     def bulge(v):
-      new_edge = Edge(ev, v)
-      center = line_intersect(n, new_edge.normal())
-      circle = (center, distance(center, v.center()))
-      return distance(e.center(), line_circle_intersect(n, circle))
-
-    return min(vertices, key=bulge)
+      if v.center() in e.line:
+        return float('inf')
+      return e.line.bulge(v.center())
+    v = min(vertices, key=bulge)
+    return v
 
   add_edge(Edge(edges[0].vertices[0], first_vertex()))
 
@@ -229,7 +144,7 @@ def main():
       if event.type == pygame.QUIT:
         sys.exit(0)
       else:
-        print event
+        pass#print event
 
 if __name__ == '__main__':
   main()
