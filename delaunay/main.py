@@ -13,12 +13,13 @@ import random
 import sys
 
 from geometry import vec, line
+import mesh
 
-class Vertex(Sprite):
+class VertexSprite(Sprite):
 
-  def __init__(self, size=10, round=8):
+  def __init__(self, vertex, size=10, round=8):
     Sprite.__init__(self)
-    self.adj = []
+    self._vertex = vertex
     background = (255, 0, 255)
     pad = 2
     self.image = i = Surface((2*size+2*pad, 2*size+2*pad))
@@ -35,90 +36,35 @@ class Vertex(Sprite):
     circ(size, round, pad, (0, 0, 0))
     circ(size-1, round-1, pad+1, (255, 255, 255))
     self.rect = i.get_rect()
+    self.move()
 
-  def move(self, position):
-    self.rect.center = tuple(position)
+  def vertex(self):
+    return self._vertex
 
-  def move_random(self, space):
-    self.move(random_2d(space))
+  def move(self):
+    self.rect.center = tuple(self.vertex().loc())
 
-  def center(self):
-    return vec(self.rect.center)
-
-class Edge:
-
-  def __init__(self, *vertices):
-    if vertices[0] == vertices[1]:
-      raise ValueError
-    v = self.vertices = vertices
-    self.line = line(map(lambda v: v.center(), vertices))
-
-  def draw(self, surface):
-    v = map(lambda v: v.center(), self.vertices)
-    aaline(surface, (200, 200, 200), tuple(v[0]), tuple(v[1]))
-    n = (v[0] - v[1]).rotate(math.pi/2).unit()
-    for o in [2, -2, 4, -4]:
-      aaline(surface, (200, 200, 200), tuple(v[0] + o*n), tuple(v[1] + o*n))
-
-class Triangle:
-
-  def __init__(self, vertices):
-    cs = self.corners = map(lambda v: Corner(self, v), vertices)
-    for i in xrange(3):
-      cs[i].next = cs[(i+1) % 3]
-      cs[i].prev = cs[(i+2) % 3]
-
-class Corner:
-
-  def __init__(self, triangle, vertex):
-    self.triangle = triangle
-    self.vertex = vertex
-    self.next = self.prev = self.swing = self.unswing = None
+def draw_edge(e, surface):
+  (a, b) = map(lambda v: v.loc(), e)
+  aaline(surface, (200, 200, 200), tuple(a), tuple(b))
+  n = (a - b).rotate(math.pi/2).unit()
+  for o in [2, 4]:
+    for o in map(lambda i: i * o, [-1, 1]):
+      aaline(surface, (200, 200, 200), tuple(a + o*n), tuple(b + o*n))
 
 def main():
 
   screen = pygame.display.set_mode((800, 600))
-
-  vertices = Group(*[ Vertex() for i in xrange(50) ])
-
-  edges = []
-
-  def random_2d(space):
+  def point_space():
+    s = screen.get_size()
+    p = 50
+    return (p, p, s[0]-2*p, s[1]-2*p)
+  def random_point():
+    space = point_space()
     return vec([ space[i] + random.random() * space[i+2] for i in xrange(2) ])
-
-  def shuffle_vertices(space):
-    for v in vertices.sprites():
-      s = screen.get_size()
-      p = 25
-      v.move(random_2d((p, p, s[0]-2*p, s[1]-2*p)))
-
-  shuffle_vertices(screen)
-
-  def first_edge():
-    a = min(vertices, key=lambda v: v.center().y())
-    b = min(vertices, key=lambda v: (v.center()-a.center()).ang())
-    return Edge(a,b)
-
-  def add_edge(e):
-    for i in xrange(2):
-      e.vertices[i].adj.append(e.vertices[(i + 1)%2])
-    edges.append(e)
-
-  add_edge(first_edge())
-
-  def distance(a, b):
-    return math.sqrt(sum(map(lambda x: x**2, array(a) - array(b))))
-
-  def first_vertex():
-    e = edges[0]
-    def bulge(v):
-      if v.center() in e.line:
-        return float('inf')
-      return e.line.bulge(v.center())
-    v = min(vertices, key=bulge)
-    return v
-
-  add_edge(Edge(edges[0].vertices[0], first_vertex()))
+  M = mesh.Mesh(list([ random_point() for i in xrange(20) ]))
+  print(M)
+  vertex_sprites = Group(*map(VertexSprite, M.vertices()))
 
   background = Surface(screen.get_size()).convert()
   background.fill((100, 120, 150))
@@ -134,9 +80,10 @@ def main():
 
     if dirty:
       bg()
-      for e in edges:
-        e.draw(screen)
-      vertices.draw(screen)
+      for t in M.triangles():
+        for e in t.edges():
+          draw_edge(e, screen)
+      vertex_sprites.draw(screen)
       pygame.display.flip()
       dirty = False
 

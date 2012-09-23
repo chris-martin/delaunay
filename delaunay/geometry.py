@@ -129,6 +129,9 @@ class Vec:
 
     self._mag = mag
 
+    if (x is None or y is None) and ang is None:
+      raise ValueError
+
   def __eq__(self, other):
     try:
       return tuple(self) == tuple(other)
@@ -358,6 +361,7 @@ class Line:
     is arbitrary but consistent.
     Uses Jarek's "2-dimensional cross-product".
     """
+    p = vec(p)
     def cross(a, b):
       return a * b.rotate(halfpi)
     q = cross(p - self.a(), self.b() - self.a()) < 0
@@ -373,7 +377,6 @@ class Line:
     bulge as defined by Jarek Rossignac.
     """
     c = triangle(list(self) + [point]).circle()
-    print(c)
     return c.radius() * self.side(point) * self.side(c.center())
 
 class Circle:
