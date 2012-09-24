@@ -55,13 +55,15 @@ def draw_edge(e, surface):
         tuple(b + o*n + -1.*(4-abs(o))*m)
       )
 
-def draw_triangle(t, surface):
+def draw_triangle(t, surface, marked=False):
   ((x1, y1), (x2, y2), (x3, y3)) = map(lambda c: tuple(c.vertex().loc()), t)
   (x1, y1, x2, y2, x3, y3) = map(int, (x1, y1, x2, y2, x3, y3))
-  filled_trigon(surface, x1, y1, x2, y2, x3, y3, (0, 80, 240))
+  color = (0, 80, 240) if not marked else (160, 100, 200)
+  filled_trigon(surface, x1, y1, x2, y2, x3, y3, color)
 
-# def draw_marker(loc, surface):
-#   filled_circle(surface, )
+def draw_marker(loc, surface):
+  (x, y) = map(int, loc)
+  filled_circle(surface, x, y, 5, (255, 0, 0))
 
 class Main:
 
@@ -72,6 +74,7 @@ class Main:
       + [ (25, 25), (775, 25), (25, 575), (775, 575),
           (400, 20), (400, 580), (20, 300), (780, 300) ]
     )
+    self._marker = self._M.triangles()[0][0]
     self._dirty = True
     self._bg = Surface(self._screen.get_size()).convert()
     self._bg.fill((150, 170, 200))
@@ -93,16 +96,24 @@ class Main:
     if self._dirty:
       self.bg()
       for t in self._M.triangles():
-        draw_triangle(t, self._screen)
+        draw_triangle(t, self._screen, t == self._marker.triangle())
       for t in self._M.triangles():
         for e in t.edges():
           draw_edge(e, self._screen)
       self._vertex_sprites.draw(self._screen)
+      draw_marker(self._marker.loc(), self._screen)
       pygame.display.flip()
       self._dirty = False
 
   def event(self, e):
-    pass
+    if e.type == pygame.KEYDOWN:
+      key = e.dict['key']
+      if key == ord('n'):
+        self._marker = self._marker.next()
+        self._dirty = True
+      if key == ord('p'):
+        self._marker = self._marker.prev()
+        self._dirty = True
 
 def main():
   main = Main()

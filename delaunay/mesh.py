@@ -127,6 +127,12 @@ class Corner:
   def vertex(self):
     return self._vertex
 
+  def triangle(self):
+    return self._triangle
+
+  def loc(self):
+    return self.vertex().loc()
+
   def next(self):
     return self._triangle.corner_step(self, 1)
 
