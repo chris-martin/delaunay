@@ -46,11 +46,15 @@ class VertexSprite(Sprite):
 
 def draw_edge(e, surface):
   (a, b) = map(lambda v: v.loc(), e)
-  aaline(surface, (200, 200, 200), tuple(a), tuple(b))
-  n = (a - b).rotate(math.pi/2).unit()
-  for o in [2, 4]:
+  #aaline(surface, (200, 200, 200), tuple(a), tuple(b))
+  m = (a - b).unit()
+  n = m.rotate(math.pi/2)
+  for o in [1,2.5]:
     for o in map(lambda i: i * o, [-1, 1]):
-      aaline(surface, (200, 200, 200), tuple(a + o*n), tuple(b + o*n))
+      aaline(surface, (200, 200, 200),
+        tuple(a + o*n + (4-abs(o))*m),
+        tuple(b + o*n + -1.*(4-abs(o))*m)
+      )
 
 def main():
 
@@ -83,7 +87,7 @@ def main():
       for t in M.triangles():
         for e in t.edges():
           draw_edge(e, screen)
-      vertex_sprites.draw(screen)
+      #vertex_sprites.draw(screen)
       pygame.display.flip()
       dirty = False
 
