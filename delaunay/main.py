@@ -1,7 +1,7 @@
 import pygame
 pygame.init()
 from pygame import draw, Surface
-from pygame.draw import aaline
+from pygame.draw import aaline, aalines, polygon
 from pygame.gfxdraw import box, filled_circle
 from pygame.sprite import Group, Sprite
 Clock = pygame.time.Clock()
@@ -46,15 +46,18 @@ class VertexSprite(Sprite):
 
 def draw_edge(e, surface):
   (a, b) = map(lambda v: v.loc(), e)
-  #aaline(surface, (200, 200, 200), tuple(a), tuple(b))
   m = (a - b).unit()
   n = m.rotate(math.pi/2)
-  for o in [1,2.5]:
+  for o in [0, 1.25, 2.5]:
     for o in map(lambda i: i * o, [-1, 1]):
-      aaline(surface, (200, 200, 200),
+      aaline(surface, (0, 0, 0),
         tuple(a + o*n + (4-abs(o))*m),
         tuple(b + o*n + -1.*(4-abs(o))*m)
       )
+
+def draw_triangle(t, surface):
+  polygon(surface, (0, 80, 240),
+    map(lambda c: tuple(c.vertex().loc()), t))
 
 def main():
 
@@ -71,7 +74,7 @@ def main():
   vertex_sprites = Group(*map(VertexSprite, M.vertices()))
 
   background = Surface(screen.get_size()).convert()
-  background.fill((100, 120, 150))
+  background.fill((150, 170, 200))
 
   def bg():
     screen.blit(background, (0, 0))
@@ -84,6 +87,8 @@ def main():
 
     if dirty:
       bg()
+      for t in M.triangles():
+        draw_triangle(t, screen)
       for t in M.triangles():
         for e in t.edges():
           draw_edge(e, screen)
