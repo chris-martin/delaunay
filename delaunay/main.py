@@ -2,7 +2,7 @@ import pygame
 pygame.init()
 from pygame import draw, Surface
 from pygame.draw import aaline, aalines, polygon
-from pygame.gfxdraw import box, filled_circle
+from pygame.gfxdraw import box, filled_circle, filled_trigon
 from pygame.sprite import Group, Sprite
 Clock = pygame.time.Clock()
 
@@ -56,8 +56,12 @@ def draw_edge(e, surface):
       )
 
 def draw_triangle(t, surface):
-  polygon(surface, (0, 80, 240),
-    map(lambda c: tuple(c.vertex().loc()), t))
+  ((x1, y1), (x2, y2), (x3, y3)) = map(lambda c: tuple(c.vertex().loc()), t)
+  (x1, y1, x2, y2, x3, y3) = map(int, (x1, y1, x2, y2, x3, y3))
+  filled_trigon(surface, x1, y1, x2, y2, x3, y3, (0, 80, 240))
+
+# def draw_marker(loc, surface):
+#   filled_circle(surface, )
 
 class Main:
 
