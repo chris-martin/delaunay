@@ -17,7 +17,7 @@ import mesh
 
 class VertexSprite(Sprite):
 
-  def __init__(self, vertex, size=10, round=8):
+  def __init__(self, vertex, size=8, round=6):
     Sprite.__init__(self)
     self._vertex = vertex
     background = (255, 0, 255)
@@ -34,7 +34,7 @@ class VertexSprite(Sprite):
       box(i, (p+r, p+0, 2*s-2*r, 2*s+1), c)
       box(i, (p+0, p+r, 2*s+1, 2*s-2*r), c)
     circ(size, round, pad, (0, 0, 0))
-    circ(size-1, round-1, pad+1, (255, 255, 255))
+    circ(size-4, round-4, pad+4, (100, 120, 140))
     self.rect = i.get_rect()
     self.move()
 
@@ -48,7 +48,7 @@ def draw_edge(e, surface):
   (a, b) = map(lambda v: v.loc(), e)
   m = (a - b).unit()
   n = m.rotate(math.pi/2)
-  for o in [0, 1.25, 2.5]:
+  for o in [0, 1.75]:
     for o in map(lambda i: i * o, [-1, 1]):
       aaline(surface, (0, 0, 0),
         tuple(a + o*n + (4-abs(o))*m),
@@ -59,48 +59,57 @@ def draw_triangle(t, surface):
   polygon(surface, (0, 80, 240),
     map(lambda c: tuple(c.vertex().loc()), t))
 
-def main():
+class Main:
 
-  screen = pygame.display.set_mode((800, 600))
-  def point_space():
-    s = screen.get_size()
+  def __init__(self):
+    self._screen = pygame.display.set_mode((800, 600))
+    self._M = mesh.Mesh(
+      list([ self.random_point() for i in xrange(25) ])
+      + [ (25, 25), (775, 25), (25, 575), (775, 575),
+          (400, 20), (400, 580), (20, 300), (780, 300) ]
+    )
+    self._dirty = True
+    self._bg = Surface(self._screen.get_size()).convert()
+    self._bg.fill((150, 170, 200))
+    self._vertex_sprites = Group(*map(VertexSprite, self._M.vertices()))
+
+  def point_space(self):
+    s = self._screen.get_size()
     p = 50
     return (p, p, s[0]-2*p, s[1]-2*p)
-  def random_point():
-    space = point_space()
+
+  def random_point(self):
+    space = self.point_space()
     return vec([ space[i] + random.random() * space[i+2] for i in xrange(2) ])
-  M = mesh.Mesh(list([ random_point() for i in xrange(20) ]))
-  print(M)
-  vertex_sprites = Group(*map(VertexSprite, M.vertices()))
 
-  background = Surface(screen.get_size()).convert()
-  background.fill((150, 170, 200))
+  def bg(self):
+    self._screen.blit(self._bg, (0, 0))
 
-  def bg():
-    screen.blit(background, (0, 0))
-
-  dirty = True
-
-  while True:
-
-    Clock.tick(20)
-
-    if dirty:
-      bg()
-      for t in M.triangles():
-        draw_triangle(t, screen)
-      for t in M.triangles():
+  def tick(self):
+    if self._dirty:
+      self.bg()
+      for t in self._M.triangles():
+        draw_triangle(t, self._screen)
+      for t in self._M.triangles():
         for e in t.edges():
-          draw_edge(e, screen)
-      #vertex_sprites.draw(screen)
+          draw_edge(e, self._screen)
+      self._vertex_sprites.draw(self._screen)
       pygame.display.flip()
-      dirty = False
+      self._dirty = False
 
+  def event(self, e):
+    pass
+
+def main():
+  main = Main()
+  while True:
+    Clock.tick(20)
+    main.tick()
     for event in pygame.event.get():
       if event.type == pygame.QUIT:
-        sys.exit(0)
+        return
       else:
-        pass#print event
+        main.event(event)
 
 if __name__ == '__main__':
   main()
