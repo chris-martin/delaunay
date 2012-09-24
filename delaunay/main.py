@@ -107,12 +107,19 @@ class Main:
 
   def event(self, e):
     if e.type == pygame.KEYDOWN:
-      key = e.dict['key']
-      if key == ord('n'):
+      (key, mod) = map(lambda p: e.dict[p], ('key', 'mod'))
+      shift = mod & pygame.KMOD_SHIFT
+      if key == pygame.K_n:
         self._marker = self._marker.next()
         self._dirty = True
-      if key == ord('p'):
+      if key == pygame.K_p:
         self._marker = self._marker.prev()
+        self._dirty = True
+      if key == pygame.K_s:
+        self._marker = self._marker.swing(sup = shift)
+        self._dirty = True
+      if key == pygame.K_u:
+        self._marker = self._marker.unswing(sup = shift)
         self._dirty = True
 
 def main():

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from itertools import permutations
 
 import geometry
@@ -66,6 +67,12 @@ class Triangle:
 
   def __init__(self, vertices):
     assert len(vertices) == 3
+
+    """Vertices are sorted in clockwise rotation."""
+    t = geometry.triangle(map(lambda v: v.loc(), vertices))
+    c = t.center()
+    vertices = sorted(vertices, key=lambda v: (v.loc() - c).ang())
+
     def corner(v):
       return Corner(triangle = self, vertex = v)
     self._corners = list(map(corner, vertices))
@@ -120,7 +127,7 @@ class Corner:
   def __init__(self, triangle, vertex):
     self._triangle = triangle
     self._vertex = vertex
-    self._swing = None
+    self._swing = Swings()
     if vertex._corner is None:
       vertex._corner = self
 
@@ -139,6 +146,44 @@ class Corner:
   def prev(self):
     return self._triangle.corner_step(self, -1)
 
+  def swing(self, rev=False, sup=False):
+    swing = self._swing[rev]
+    if swing.sup and not sup:
+      return self
+    c = swing.corner
+    assert c is not None
+    return c
+
+  def super_swing(self):
+    return self.swing(sup=True)
+
+  def unswing(self, sup=False):
+    return self.swing(rev=True, sup=sup)
+
+  def super_unswing(self):
+    return self.swing(rev=True, sup=True)
+
+class Swings:
+
+  __slots__ = [ 'next', 'prev' ]
+
+  def __init__(self):
+    self.next = Swing()
+    self.prev = Swing()
+
+  def __getitem__(self, i):
+    if i == 0: return self.next
+    if i == 1: return self.prev
+    raise IndexError
+
+class Swing:
+
+  __slots__ = [ 'corner', 'sup' ]
+
+  def __init__(self):
+    self.corner = None
+    self.sup = False
+
 class Delaunay:
 
   def __init__(self, points):
@@ -153,6 +198,7 @@ class Delaunay:
     self._open_edges[first_edge] = None
     while len(self._open_edges) != 0:
       self.try_next_edge()
+    self.calculate_swing()
 
   def first_edge(self):
     a = min(self._vertices, key = lambda v: v.loc().y())
@@ -189,3 +235,28 @@ class Delaunay:
   def is_boundary_edge(self, e):
     vertices = [ v.loc() for v in self._vertices if v not in e ]
     return e.line().same_side(*vertices)
+
+  def calculate_swing(self):
+    v2c = defaultdict(list)
+    for t in self._triangles:
+      for c in t:
+        v2c[c.vertex()].append(c)
+    for cs in v2c.itervalues():
+      for i in cs:
+        for j in cs:
+          if i.next().vertex() == j.prev().vertex():
+            j._swing.next.corner = i
+            i._swing.prev.corner = j
+      sups = [None, None]
+      for i in cs:
+        if i._swing.next.corner is None:
+          assert sups[0] is None
+          sups[0] = i
+        if i._swing.prev.corner is None:
+          assert sups[1] is None
+          sups[1] = i
+      if sups[0] is not None:
+        sups[0]._swing.next.corner = sups[1]
+        sups[0]._swing.next.sup = True
+        sups[1]._swing.prev.corner = sups[0]
+        sups[1]._swing.prev.sup = True
