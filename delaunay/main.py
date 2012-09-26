@@ -7,10 +7,12 @@ from pygame.sprite import Group, Sprite
 Clock = pygame.time.Clock()
 
 import itertools
+from itertools import imap
 import math
 from numpy import array
 import random
 import sys
+import time
 
 from geometry import vec, line
 import mesh
@@ -46,21 +48,35 @@ class VertexSprite(Sprite):
 
 class Edge:
 
-  __slots__ = [ '_e' ]
+  __slots__ = [ '_edge', '_flash_time' ]
 
   def __init__(self, geometry_edge):
-    self._e = geometry_edge
+    self._edge = geometry_edge
+    self._flash_time = None
 
   def draw(self, surface):
-    (a, b) = map(lambda v: v.loc(), self._e)
+    (a, b) = map(lambda v: v.loc(), self._edge)
     m = (a - b).unit()
     n = m.rotate(math.pi/2)
+    flash = 0
+    if self._flash_time:
+      d = time.time() - self._flash_time
+      if d > 1:
+        self._flash_time = None
+      else:
+        flash = 1 - d
     for o in [0, 1.75]:
       for o in map(lambda i: i * o, [-1, 1]):
-        aaline(surface, (0, 0, 0),
+        aaline(surface, (255 * flash, 255 * flash, 0),
           tuple(a + o*n + (4-abs(o))*m),
           tuple(b + o*n + -1.*(4-abs(o))*m)
         )
+
+  def is_dirty(self):
+    return self._flash_time is not None
+
+  def flash(self):
+    self._flash_time = time.time()
 
 def draw_triangle(t, surface, marked=False):
   ((x1, y1), (x2, y2), (x3, y3)) = map(lambda c: tuple(c.vertex().loc()), t)
@@ -90,6 +106,8 @@ class Main:
     self._bg.fill((150, 170, 200))
     self._vertex_sprites = Group(*map(VertexSprite, self._M.vertices()))
     self._edges = map(Edge, self._M.edges())
+    for e in self._edges:
+      e.flash()
 
   def point_space(self):
     s = self._screen.get_size()
@@ -104,7 +122,7 @@ class Main:
     self._screen.blit(self._bg, (0, 0))
 
   def draw(self):
-    if self._dirty:
+    if self._dirty or any(imap(lambda e: e.is_dirty(), self._edges)):
       self.bg()
       for t in self._M.triangles():
         draw_triangle(t, self._screen, t == self._marker.triangle())
