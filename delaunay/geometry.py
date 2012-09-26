@@ -1,3 +1,4 @@
+from array import array
 from itertools import imap, permutations
 import sys
 geometry = sys.modules[__name__]
@@ -116,36 +117,25 @@ class Vec:
 
   """A point in a Euclidean plane."""
 
-  __slots__ = [ '_x', '_y', '_ang', '_mag' ]
+  __slots__ = [ '_xy', '_ang', '_mag' ]
 
   def __init__(self, xy=None, x=None, y=None, ang=None, mag=None):
 
     if xy is not None:
-      (x, y) = xy
-
-    # make sure everything is floating-point arithmetic
-    (x, y, ang, mag) = [ None if o is None else float(o)
-                         for o in (x, y, ang, mag) ]
-
-    (self._x, self._y) = (x, y)
+      xy = array('f', xy)
+    elif x is not None and y is not None:
+      xy = array('f', (x, y))
 
     if ang is not None:
       ang = ang % pi2
       """If only ang is given, mag defaults to 1."""
-      if all(map(lambda o: o is None, (x, y, mag))):
+      if xy is None and mag is None:
         mag = 1
-    self._ang = ang
 
-    self._mag = mag
-
-    if (x is None or y is None) and ang is None:
-      raise ValueError
+    (self._xy, self._ang, self._mag) = (xy, ang, mag)
 
   def __eq__(self, other):
-    try:
-      return tuple(self) == tuple(other)
-    except:
-      return False
+    return other and tuple(self) == tuple(other)
 
   def __neq__(self, other):
     return not (self == other)
@@ -158,18 +148,14 @@ class Vec:
 
   def __getitem__(self, i):
     """Iteration over the X and Y positions."""
-    if i == 0:
-      return self.x()
-    if i == 1:
-      return self.y()
-    raise IndexError
+    return self.xy()[i]
 
   def __abs__(self):
     return self.mag()
 
   def __add__(self, other):
-    return Vec( x = self.x() + other.x(),
-                y = self.y() + other.y(), )
+    ((x1, y1), (x2, y2)) = (self.xy(), other.xy())
+    return Vec([x1 + x2, y1 + y2])
 
   def __radd__(self, other):
 
@@ -180,8 +166,8 @@ class Vec:
     return self + other;
 
   def __sub__(self, other):
-    return Vec( x = self.x() - other.x(),
-                y = self.y() - other.y(), )
+    ((x1, y1), (x2, y2)) = (self.xy(), other.xy())
+    return Vec([x1 - x2, y1 - y2])
 
   def __rsub__(self, other):
     return -1 * self + other
@@ -192,54 +178,58 @@ class Vec:
     Direction is reversed if the scalar is negative.
 
     """
-    return Vec(map(lambda c: c * other, self))
+    xy = self.xy()
+    return Vec([xy[0]*other, xy[1]*other])
 
   def __rmul__(self, other):
     return self * other
 
   def __div__(self, other):
-
-    """Second argument must be Real."""
-    if not isinstance(other, Real):
-      return NotImplemented
-
-    return self * (1. / other)
+    xy = self.xy()
+    return Vec([xy[0]/other, xy[1]/other])
 
   def __cmp__(self, other):
     return cmp(self.mag(), other.mag())
 
   def dot(self, other):
     """Scalar (dot) product of two vectors"""
-    return self.x() * other.x() + self.y() * other.y()
+    (a, b) = (self.xy(), other.xy())
+    return a[0] * b[0] + a[1] * b[1]
+
+  def xy(self):
+    xy = self._xy
+    if xy is None:
+      (ang, mag) = (self._ang, self._mag)
+      xy = self._xy = array('f', [
+        mag * cos(ang),
+        mag * sin(ang)
+      ])
+    return xy
 
   def x(self):
     """X position on the Euclidean plane. Real."""
-    x = self._x
-    if x is None:
-      x = self._x = self._mag * cos(self._ang)
-    return x
+    return self.xy()[0]
 
   def y(self):
     """Y position on the Euclidean plane. Real."""
-    y = self._y
-    if y is None:
-      y = self._y = self._mag * sin(self._ang)
-    return y
+    return self.xy()[1]
 
   def ang(self):
     """Angle from origin to self. Real between 0 and 2 pi."""
     if self._ang is None:
-      if (0, 0) == tuple(self):
+      (x, y) = self._xy
+      if (x == y == 0) == tuple(self):
         self._ang = float('nan')
       else:
-        self._ang = atan2(self._y, self._x) % pi2
+        self._ang = atan2(y, x) % pi2
     return self._ang
 
   def mag(self):
     """The vector's L2 norm. Nonnegative real."""
     mag = self._mag
     if mag is None:
-      mag = self._mag = sqrt(self._x**2 + self._y**2)
+      (x, y) = self._xy
+      mag = self._mag = sqrt(x**2 + y**2)
     return mag
 
   def unit(self):
