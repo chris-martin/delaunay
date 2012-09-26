@@ -44,16 +44,23 @@ class VertexSprite(Sprite):
   def move(self):
     self.rect.center = tuple(self.vertex().loc())
 
-def draw_edge(e, surface):
-  (a, b) = map(lambda v: v.loc(), e)
-  m = (a - b).unit()
-  n = m.rotate(math.pi/2)
-  for o in [0, 1.75]:
-    for o in map(lambda i: i * o, [-1, 1]):
-      aaline(surface, (0, 0, 0),
-        tuple(a + o*n + (4-abs(o))*m),
-        tuple(b + o*n + -1.*(4-abs(o))*m)
-      )
+class Edge:
+
+  __slots__ = [ '_e' ]
+
+  def __init__(self, geometry_edge):
+    self._e = geometry_edge
+
+  def draw(self, surface):
+    (a, b) = map(lambda v: v.loc(), self._e)
+    m = (a - b).unit()
+    n = m.rotate(math.pi/2)
+    for o in [0, 1.75]:
+      for o in map(lambda i: i * o, [-1, 1]):
+        aaline(surface, (0, 0, 0),
+          tuple(a + o*n + (4-abs(o))*m),
+          tuple(b + o*n + -1.*(4-abs(o))*m)
+        )
 
 def draw_triangle(t, surface, marked=False):
   ((x1, y1), (x2, y2), (x3, y3)) = map(lambda c: tuple(c.vertex().loc()), t)
@@ -69,6 +76,9 @@ class Main:
 
   def __init__(self):
     self._screen = pygame.display.set_mode((800, 600))
+    self.restart()
+
+  def restart(self):
     self._M = mesh.Mesh(
       list([ self.random_point() for i in xrange(25) ])
       + [ (25, 25), (775, 25), (25, 575), (775, 575),
@@ -79,6 +89,7 @@ class Main:
     self._bg = Surface(self._screen.get_size()).convert()
     self._bg.fill((150, 170, 200))
     self._vertex_sprites = Group(*map(VertexSprite, self._M.vertices()))
+    self._edges = map(Edge, self._M.edges())
 
   def point_space(self):
     s = self._screen.get_size()
@@ -92,14 +103,13 @@ class Main:
   def bg(self):
     self._screen.blit(self._bg, (0, 0))
 
-  def tick(self):
+  def draw(self):
     if self._dirty:
       self.bg()
       for t in self._M.triangles():
         draw_triangle(t, self._screen, t == self._marker.triangle())
-      for t in self._M.triangles():
-        for e in t.edges():
-          draw_edge(e, self._screen)
+      for e in self._edges:
+        e.draw(self._screen)
       self._vertex_sprites.draw(self._screen)
       draw_marker(self._marker.loc(), self._screen)
       pygame.display.flip()
@@ -111,22 +121,21 @@ class Main:
       shift = mod & pygame.KMOD_SHIFT
       if key == pygame.K_n:
         self._marker = self._marker.next()
-        self._dirty = True
       if key == pygame.K_p:
         self._marker = self._marker.prev()
-        self._dirty = True
       if key == pygame.K_s:
         self._marker = self._marker.swing(sup = shift)
-        self._dirty = True
       if key == pygame.K_u:
         self._marker = self._marker.unswing(sup = shift)
-        self._dirty = True
+      if key == pygame.K_r:
+        self.restart()
+      self._dirty = True
 
 def main():
   main = Main()
   while True:
     Clock.tick(20)
-    main.tick()
+    main.draw()
     for event in pygame.event.get():
       if event.type == pygame.QUIT:
         return

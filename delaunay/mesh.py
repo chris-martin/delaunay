@@ -1,5 +1,5 @@
 from collections import defaultdict
-from itertools import permutations
+from itertools import chain, imap, permutations
 
 import geometry
 from geometry import vec
@@ -23,6 +23,9 @@ class Mesh:
 
   def vertices(self):
     return self._vertices
+
+  def edges(self):
+    return set(chain(*imap(lambda t: t.edges(), self._triangles)))
 
 class Edge:
 
