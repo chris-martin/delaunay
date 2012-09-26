@@ -89,7 +89,6 @@ def intersect_line_circle(line, circle):
   """
   r = circle.radius()
   cc = circle.center()
-  line = geometry.line(line)
   line = line - cc
   (dx, dy) = line[1] - line[0]
   (p1, p2) = line
@@ -169,12 +168,6 @@ class Vec:
     return self.mag()
 
   def __add__(self, other):
-    try:
-      other = vec(other)
-    except:
-      return NotImplemented
-    if other is None:
-      return NotImplemented
     return Vec( x = self.x() + other.x(),
                 y = self.y() + other.y(), )
 
@@ -187,12 +180,6 @@ class Vec:
     return self + other;
 
   def __sub__(self, other):
-    try:
-      other = vec(other)
-    except:
-      return NotImplemented
-    if other is None:
-      return NotImplemented
     return Vec( x = self.x() - other.x(),
                 y = self.y() - other.y(), )
 
@@ -200,23 +187,12 @@ class Vec:
     return -1 * self + other
 
   def __mul__(self, other):
+    """
+    Components are multiplied by the scalar.
+    Direction is reversed if the scalar is negative.
 
-    if isinstance(other, Real):
-      """
-      Components are multiplied by the scalar.
-      Direction is reversed if the scalar is negative.
-      """
-      return Vec(map(lambda c: c * other, self))
-
-    try:
-      other = vec(other)
-    except:
-      return NotImplemented
-    if other is None:
-      return NotImplemented
-
-    """Scalar (dot) product of two vectors"""
-    return self.x() * other.x() + self.y() * other.y()
+    """
+    return Vec(map(lambda c: c * other, self))
 
   def __rmul__(self, other):
     return self * other
@@ -230,15 +206,11 @@ class Vec:
     return self * (1. / other)
 
   def __cmp__(self, other):
-    if isinstance(other, Real):
-      return cmp(self.mag(), other)
-    try:
-      other = vec(other)
-    except:
-      return NotImplemented
-    if other is None:
-      return NotImplemented
     return cmp(self.mag(), other.mag())
+
+  def dot(self, other):
+    """Scalar (dot) product of two vectors"""
+    return self.x() * other.x() + self.y() * other.y()
 
   def x(self):
     """X position on the Euclidean plane. Real."""
@@ -378,7 +350,7 @@ class Line:
     """
     p = vec(p)
     def cross(a, b):
-      return a * b.rotate(halfpi)
+      return a.dot(b.rotate(halfpi))
     (a, b) = self
     q = cross(p - a, b - a) < 0
     return -1 if q else 1
@@ -392,7 +364,7 @@ class Line:
     A number not equal, but correlated, to
     bulge as defined by Jarek Rossignac.
     """
-    c = triangle(list(self) + [point]).circle()
+    c = Triangle(list(self) + [point]).circle()
     side = self.side
     return c.radius() * side(point) * side(c.center())
 
@@ -476,8 +448,8 @@ class Triangle:
     c = self._center
     if c is None:
       c = self._center = intersect_lines(
-        line(self[0:2]).perp(),
-        line(self[1:3]).perp(),
+        Line(self[0:2]).perp(),
+        Line(self[1:3]).perp(),
       )
     return c
 
@@ -485,7 +457,7 @@ class Triangle:
     """The circle that circumscribes self."""
     c = self.center()
     if c is not None:
-      return circle(
+      return Circle(
         center = c,
         radius = abs(c - self[0])
       )

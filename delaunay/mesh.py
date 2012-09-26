@@ -2,7 +2,6 @@ from collections import defaultdict
 from itertools import chain, imap, permutations
 
 import geometry
-from geometry import vec
 
 class Mesh:
 
@@ -40,7 +39,7 @@ class Edge:
     self._b = b
 
   def line(self):
-    return geometry.line(map(lambda v: v.loc(), self))
+    return geometry.Line(map(lambda v: v.loc(), self))
 
   def __getitem__(self, i):
     """Iteration over the vertices."""
@@ -72,7 +71,7 @@ class Triangle:
     assert len(vertices) == 3
 
     """Vertices are sorted in clockwise rotation."""
-    t = geometry.triangle(map(lambda v: v.loc(), vertices))
+    t = geometry.Triangle(map(lambda v: v.loc(), vertices))
     c = t.center()
     vertices = sorted(vertices, key=lambda v: (v.loc() - c).ang())
 
@@ -108,7 +107,7 @@ class Vertex:
   __slots__ = [ '_loc', '_corner' ]
 
   def __init__(self, loc):
-    self._loc = vec(loc)
+    self._loc = loc
     self._corner = None
 
   def loc(self, new_loc = None):

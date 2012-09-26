@@ -16,7 +16,8 @@ import random
 import sys
 import time
 
-from geometry import Vec, vec, line
+import geometry
+from geometry import Vec
 import mesh
 
 class VertexSprite(Sprite):
@@ -75,7 +76,7 @@ class Edge:
     map(draw_line, [0, -1.75, 1.75])
 
   def line(self):
-    return line(map(lambda v: v.loc(), self._mesh_edge))
+    return geometry.Line(map(lambda v: v.loc(), self._mesh_edge))
 
   def is_dirty(self):
     return self._flash_time is not None
@@ -102,8 +103,8 @@ class Main:
   def restart(self):
     self._M = mesh.Mesh(
       [self.random_point() for i in xrange(50)]
-      + [ (25, 25), (775, 25), (25, 575), (775, 575),
-          (400, 20), (400, 580), (20, 300), (780, 300) ]
+      + map(Vec, ( (25, 25), (775, 25), (25, 575), (775, 575),
+          (400, 20), (400, 580), (20, 300), (780, 300) ))
     )
     self._marker = self._M.triangles()[0][0]
     self._dirty = True
@@ -148,8 +149,8 @@ class Main:
 
   def event(self, e):
     if e.type == MOUSEMOTION:
-      (pos, rel) = map(lambda p: Vec(e.dict[p]), ('pos', 'rel'))
-      motion = line(pos-rel, pos)
+      (pos, rel) = map(Vec, map(lambda p: e.dict[p], ('pos', 'rel')))
+      motion = geometry.Line(a=pos-rel, b=pos)
       self.mouse_motion(motion)
     elif e.type == pygame.KEYDOWN:
       (key, mod) = map(lambda p: e.dict[p], ('key', 'mod'))
