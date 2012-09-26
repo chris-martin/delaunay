@@ -57,7 +57,13 @@ def _line_between_segment(x):
 
 def overlap_line_segments(a, b):
   """Do the line segments intersect?"""
-  return all(imap(_line_between_segment, permutations((a, b))))
+
+  abba = ((a, b), (b, a))
+
+  # TODO - return immediately if non-overlap is
+  # obvious just by comparing x and y coordinates
+
+  return all(imap(_line_between_segment, abba))
 
 def intersect_lines(a, b):
   """The intersection of two lines. None or a vector."""
