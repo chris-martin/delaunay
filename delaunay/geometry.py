@@ -1,7 +1,7 @@
+from itertools import imap, permutations
 import sys
 geometry = sys.modules[__name__]
-import math
-from math import pi
+from math import sin, cos, atan2, pi, sqrt, copysign
 from numbers import Real
 import numpy as np
 
@@ -47,10 +47,19 @@ def triangle(*vargs):
   return Triangle(vargs)
 
 def sign(x):
-  return math.copysign(1, x)
+  return copysign(1, x)
+
+def _line_between_segment(x):
+  (a, b) = x
+  """Does line a pass through segment b?"""
+  return 0 == sum(map(a.side, b))
+
+def overlap_line_segments(a, b):
+  """Do the line segments intersect?"""
+  return all(imap(_line_between_segment, permutations((a, b))))
 
 def intersect_lines(a, b):
-  """None or a vector."""
+  """The intersection of two lines. None or a vector."""
 
   (a, b) = map(line, (a, b))
 
@@ -68,7 +77,7 @@ def intersect_lines(a, b):
   d = (x1-x2)*(y3-y4) - (y1-y2)*(x3-x4)
   x = ((x1*y2-y1*x2)*(x3-x4) - (x1-x2)*(x3*y4-y3*x4)) / d
   y = ((x1*y2-y1*x2)*(y3-y4) - (y1-y2)*(x3*y4-y3*x4)) / d
-  return vec(x, y)
+  return Vec(x=x, y=y)
 
 def intersect_line_circle(line, circle):
   """
@@ -79,22 +88,23 @@ def intersect_line_circle(line, circle):
 
   """
   r = circle.radius()
+  cc = circle.center()
   line = geometry.line(line)
-  line = line - circle.center()
+  line = line - cc
   (dx, dy) = line[1] - line[0]
   (p1, p2) = line
-  dr = math.sqrt(dx**2+dy**2)
+  dr = sqrt(dx**2+dy**2)
   D = p1[0]*p2[1] - p2[0]*p1[1]
-  q = math.sqrt(r**2 * dr**2 - D**2)
+  q = sqrt(r**2 * dr**2 - D**2)
 
   # no intersection
   if q < 0:
     return []
 
-  i = ( vec(D*dy+sign(dy)*dx*q, 0-D*dx+abs(dy)*q),
-        vec(D*dy-sign(dy)*dx*q, 0-D*dx-abs(dy)*q), )
+  i = ( Vec(x=D*dy+sign(dy)*dx*q, y=0-D*dx+abs(dy)*q),
+        Vec(x=D*dy-sign(dy)*dx*q, y=0-D*dx-abs(dy)*q), )
 
-  i = list(map(lambda i: i/dr**2 + circle.center(), i))
+  i = list(map(lambda i: i/dr**2 + cc, i))
 
   # one intersection (tangent)
   if i[0] == i[1]:
@@ -232,15 +242,17 @@ class Vec:
 
   def x(self):
     """X position on the Euclidean plane. Real."""
-    if self._x is None:
-      self._x = self._mag * math.cos(self._ang)
-    return self._x
+    x = self._x
+    if x is None:
+      x = self._x = self._mag * cos(self._ang)
+    return x
 
   def y(self):
     """Y position on the Euclidean plane. Real."""
-    if self._y is None:
-      self._y = self._mag * math.sin(self._ang)
-    return self._y
+    y = self._y
+    if y is None:
+      y = self._y = self._mag * sin(self._ang)
+    return y
 
   def ang(self):
     """Angle from origin to self. Real between 0 and 2 pi."""
@@ -248,20 +260,21 @@ class Vec:
       if (0, 0) == tuple(self):
         self._ang = float('nan')
       else:
-        self._ang = math.atan2(self._y, self._x) % pi2
+        self._ang = atan2(self._y, self._x) % pi2
     return self._ang
 
   def mag(self):
     """The vector's L2 norm. Nonnegative real."""
-    if self._mag is None:
-      self._mag = math.sqrt(self._x**2 + self._y**2)
-    return self._mag
+    mag = self._mag
+    if mag is None:
+      mag = self._mag = sqrt(self._x**2 + self._y**2)
+    return mag
 
   def unit(self):
     return self / abs(self)
 
   def rotate(self, ang):
-    return vec(ang = self.ang() + ang, mag = self.mag())
+    return Vec(ang = self.ang() + ang, mag = self.mag())
 
 class Line:
 
@@ -312,15 +325,17 @@ class Line:
     return self._a
 
   def b(self):
-    if self._b is None:
-      self._b = self._a + vec(ang = self.ang(), mag = 1)
-    return self._b
+    b = self._b
+    if b is None:
+      b = self._b = self._a + Vec(ang = self.ang(), mag = 1)
+    return b
 
   def ang(self):
     """Real between 0 and pi."""
-    if self._ang is None:
-      self._ang = (self._a - self._b).ang() % pi
-    return self._ang
+    ang = self._ang
+    if ang is None:
+      ang = self._ang = (self._a - self._b).ang() % pi
+    return ang
 
   def __add__(self, other):
     try:
@@ -364,12 +379,13 @@ class Line:
     p = vec(p)
     def cross(a, b):
       return a * b.rotate(halfpi)
-    q = cross(p - self.a(), self.b() - self.a()) < 0
+    (a, b) = self
+    q = cross(p - a, b - a) < 0
     return -1 if q else 1
 
   def same_side(self, *ps):
     """Are all the points on the same side of self?"""
-    return len(set(map(lambda p: self.side(p), ps))) == 1
+    return len(set(map(self.side, ps))) == 1
 
   def bulge(self, point):
     """
@@ -377,7 +393,33 @@ class Line:
     bulge as defined by Jarek Rossignac.
     """
     c = triangle(list(self) + [point]).circle()
-    return c.radius() * self.side(point) * self.side(c.center())
+    side = self.side
+    return c.radius() * side(point) * side(c.center())
+
+  def intersect(self, other):
+
+    """The intersection of this line with another line."""
+    if isinstance(other, Line):
+      return intersect_lines(self, other)
+
+    """The intersections of this line with a circle."""
+    if isinstance(other, Circle):
+      return intersect_line_circle(self, other)
+
+    raise TypeError
+
+  def overlap(self, other):
+
+    """
+    Does this line segment intersect with
+    other line segment?
+
+    """
+    if isinstance(other, Line):
+      return overlap_line_segments(self, other)
+
+    raise TypeError
+
 
 class Circle:
 
@@ -398,6 +440,14 @@ class Circle:
 
   def radius(self):
     return self._radius
+
+  def intersect(self, other):
+
+    """The intersections of this circle with a line."""
+    if isinstance(other, Line):
+      return intersect_line_circle(other, self)
+
+    raise TypeError
 
 class Triangle:
 
@@ -423,11 +473,13 @@ class Triangle:
     The circumcenter of the triangle.
     None if the points are collinear.
     """
-    if self._center is None:
-      ab = line(self[0], self[1])
-      ac = line(self[0], self[2])
-      self._center = intersect_lines(ab.perp(), ac.perp())
-    return self._center
+    c = self._center
+    if c is None:
+      c = self._center = intersect_lines(
+        line(self[0:2]).perp(),
+        line(self[1:3]).perp(),
+      )
+    return c
 
   def circle(self):
     """The circle that circumscribes self."""
