@@ -147,7 +147,10 @@ public final class Geometry {
 
   }
 
-  public static enum Side { LEFT(-1), RIGHT(1); final int i; Side(int i) { this.i = i; } }
+  public static enum Side { LEFT(-1), RIGHT(1);
+    final int i; Side(int i) { this.i = i; }
+    Side opposite() { return this == LEFT ? RIGHT : LEFT; }
+  }
 
   private static abstract class BaseLine implements Line {
     public Side side(Vec p) { return p.sub(a()).cross(b().sub(a())) > 0 ? LEFT : RIGHT; }

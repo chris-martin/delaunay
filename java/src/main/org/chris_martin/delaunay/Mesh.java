@@ -1,11 +1,27 @@
 package org.chris_martin.delaunay;
 
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
+
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Ordering;
 import org.chris_martin.delaunay.Geometry.Line;
+import org.chris_martin.delaunay.Geometry.Side;
 import org.chris_martin.delaunay.Geometry.Vec;
 
-import java.util.*;
-import java.util.Map.Entry;
-
+import static com.google.common.collect.Sets.newHashSet;
+import static java.util.Arrays.asList;
 import static java.util.Collections.min;
 import static java.util.Collections.unmodifiableCollection;
 import static org.chris_martin.delaunay.Geometry.aToB;
@@ -23,10 +39,19 @@ public final class Mesh {
   private List<Vertex> vertices;
   public Collection<Vertex> vertices() { return unmodifiableCollection(vertices); }
 
-  private void setPoints(Collection<Vec> points) {
+  public Mesh() {}
+  public Mesh(Collection<Vec> points) { setPoints(points); }
+
+  public void setPoints(Collection<Vec> points) {
     Delaunay d = new Delaunay(points);
     triangles = d.triangles;
     vertices = d.vertices;
+  }
+
+  public Collection<Edge> edges() {
+    Set<Edge> edges = newHashSet();
+    for (Triangle t : triangles) edges.addAll(t.edges());
+    return edges;
   }
 
   public class Vertex {
@@ -43,10 +68,13 @@ public final class Mesh {
   public class Corner {
     private Triangle triangle;
     private Vertex vertex;
-    private Swings swings;
+    private Swings swings = new Swings();
+    private Corner next, prev;
     private Corner(Vertex vertex, Triangle triangle) {
       this.vertex = vertex; this.triangle = triangle;
       if (vertex.corner == null) vertex.corner = this; }
+    public Corner next() { return next; }
+    public Corner prev() { return prev; }
     public Corner swing(boolean isSuper) { return swings.next.get(isSuper); }
     public Corner unswing(boolean isSuper) { return swings.prev.get(isSuper); }
   }
@@ -65,10 +93,15 @@ public final class Mesh {
       this.a = flip ? b : a; this.b = flip ? a : b; }
     public Vertex a() { return a; }
     public Vertex b() { return b; }
+    public List<Vertex> vertices() { return asList(a(), b()); }
     public Line line() { return aToB(a.loc, b.loc); }
     public boolean equals(Object o) {
       return this == o || (o instanceof Edge && a == ((Edge) o).a && b == ((Edge) o).b); }
     public int hashCode() { return 31 * a.hashCode() + b.hashCode(); }
+    public boolean onConvexHull(List<Vertex> vertices) { Line line = line(); Side side = null;
+      for (Vertex v : vertices) if (v != a && v != b) { Side s = line.side(v.loc());
+        if (side == null) side = s; else if (s != side) return false; }
+      return true; }
   }
 
   public class Triangle {
@@ -80,8 +113,12 @@ public final class Mesh {
       X[] xs = { new X(a), new X(b), new X(c) };
       Arrays.sort(xs, new Comparator<X>() { public int compare(X a, X b) { return Double.compare(a.ang, b.ang); }});
       this.a = new Corner(xs[0].v, this); this.b = new Corner(xs[1].v, this); this.c = new Corner(xs[2].v, this);
+      initNextPrev();
     }
-
+    private void initNextPrev() { a.next = b; b.next = c; c.next = a; a.prev = c; b.prev = a; c.prev = b; }
+    public List<Corner> corners() { return asList(a, b, c); }
+    public List<Edge> edges() { Vertex a = this.a.vertex, b = this.b.vertex, c = this.c.vertex;
+      return asList(new Edge(a, b), new Edge(b, c), new Edge(c, a)); }
   }
 
   private class Delaunay {
@@ -114,48 +151,46 @@ public final class Mesh {
     }
 
     void tryNextEdge() {
-      Edge edge; Vertex previousVertex; {
+      final Edge edge; Vertex previousVertex; {
         Entry<Edge, Vertex> entry = openEdges.entrySet().iterator().next();
         edge = entry.getKey(); previousVertex = entry.getValue(); openEdges.remove(edge); }
-      Line line = edge.line();
+      final Line line = edge.line();
+      Iterable<Vertex> candidateVertices;
       if (previousVertex == null) {
-        
+        candidateVertices = Iterables.filter(vertices, new Predicate<Vertex>() { public boolean apply(Vertex vertex) {
+          return !edge.vertices().contains(vertex); } });
+      } else {
+        if (edge.onConvexHull(vertices)) return;
+        final Side side = line.side(previousVertex.loc()).opposite();
+        candidateVertices = Iterables.filter(vertices, new Predicate<Vertex>() { public boolean apply(Vertex vertex) {
+          return !edge.vertices().contains(vertex) && line.side(vertex.loc()) == side; } });
       }
+      final Vertex v = Ordering.natural().onResultOf(new Function<Vertex, Double>() { public Double apply(Vertex v) {
+        return line.bulge(v.loc()); }}).min(candidateVertices);
+      Triangle t = new Triangle(edge.a(), edge.b(), v);
+      triangles.add(t);
+      for (List<Vertex> vertexPair : ImmutableList.of(edge.vertices(), Lists.reverse(edge.vertices()))) {
+        Vertex u = vertexPair.get(0), w = vertexPair.get(1); Edge uv = new Edge(u, v);
+        if (openEdges.remove(uv) == null) { edges.add(uv); openEdges.put(uv, w); }
+      }
+    }
 
-/*
-
-    edges = self._edges
-    open_edges = self._open_edges
-    append_edge = edges.append
-
-    (edge, previous_vertex) = open_edges.iteritems().next()
-    del open_edges[edge]
-    line = edge.line()
-    if previous_vertex is None:
-      candidate_vertices = (v for v in self._vertices
-        if v not in edge)
-    else:
-      if self.is_boundary_edge(edge):
-        return
-      side = -1 * line.side(previous_vertex.loc())
-      candidate_vertices = (v for v in self._vertices
-        if v not in edge and line.side(v.loc()) == side)
-    v = min(candidate_vertices, key = lambda v: line.bulge(v.loc()))
-    t = Triangle(list(edge) + [v])
-    self._triangles.append(t)
-    for (u, w) in permutations(edge):
-      uv = Edge(u, v)
-      if uv in open_edges:
-        del open_edges[uv]
-      else:
-        append_edge(uv)
-        open_edges[uv] = w
-
-  def is_boundary_edge(self, e):
-    vertices = [ v.loc() for v in self._vertices if v not in e ]
-    return e.line().same_side(*vertices)
-*/
-
+    void calculateSwing() {
+      Multimap<Vertex, Corner> v2c = ArrayListMultimap.create();
+      for (Triangle t : triangles) for (Corner c : t.corners()) v2c.put(c.vertex, c);
+      for (Collection<Corner> cs : v2c.asMap().values()) {
+        for (Corner i : cs) for (Corner j : cs) if (i.next.vertex == j.prev.vertex)
+          { j.swings.next.corner = i; i.swings.next.corner = j; }
+        Corner si = null, sj = null;
+        for (Corner i : cs) {
+          if (i.swings.next.corner == null) si = i;
+          if (i.swings.prev.corner == null) sj = i;
+        }
+        if (si != null) {
+          si.swings.next.corner = sj; si.swings.next.isSuper = true;
+          sj.swings.prev.corner = si; sj.swings.prev.isSuper = true;
+        }
+      }
     }
 
   }
