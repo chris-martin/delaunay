@@ -98,10 +98,6 @@ public final class Mesh {
     public boolean equals(Object o) {
       return this == o || (o instanceof Edge && a == ((Edge) o).a && b == ((Edge) o).b); }
     public int hashCode() { return 31 * a.hashCode() + b.hashCode(); }
-    public boolean onConvexHull(List<Vertex> vertices) { Line line = line(); Side side = null;
-      for (Vertex v : vertices) if (v != a && v != b) { Side s = line.side(v.loc());
-        if (side == null) side = s; else if (s != side) return false; }
-      return true; }
   }
 
   public class Triangle {
@@ -126,28 +122,32 @@ public final class Mesh {
     List<Triangle> triangles = newArrayList();
     List<Vertex> vertices = newArrayList();
     List<Edge> edges = newArrayList();
+    List<Edge> convexHull = newArrayList();
     Map<Edge, Vertex> openEdges = newHashMap();
 
     Delaunay(Collection<Vec> points) {
       if (points.size() < 3) throw new IllegalArgumentException();
       for (Vec p : points) vertices.add(new Vertex(p));
-      Edge firstEdge = firstEdge();
-      edges.add(firstEdge);
-      openEdges.put(firstEdge, null);
+      calculateConvexHull();
+      for (Edge edge : convexHull) { edges.add(edge); openEdges.put(edge, null); }
       while (openEdges.size() != 0) tryNextEdge();
       calculateSwing();
     }
 
-    Edge firstEdge() {
-      final Vertex a = min(vertices, new Comparator<Vertex>() {
+    void calculateConvexHull() {
+      final Vertex start = min(vertices, new Comparator<Vertex>() {
         public int compare(Vertex i, Vertex j) { return Double.compare(key(i), key(j)); }
         double key(Vertex v) {return v.loc().y(); }
       });
-      Vertex b = min(vertices, new Comparator<Vertex>() {
-        public int compare(Vertex i, Vertex j) { return Double.compare(key(i), key(j)); }
-        double key(Vertex v) { return v == a ? Double.MAX_VALUE : (v.loc().sub(a.loc())).ang(); }
-      });
-      return new Edge(a, b);
+      Vertex a = start;
+      while (true) {
+        final Vertex a$ = a;
+        Vertex b = min(vertices, new Comparator<Vertex>() {
+          public int compare(Vertex i, Vertex j) { return Double.compare(key(i), key(j)); }
+          double key(Vertex v) { return v == a$ ? Double.MAX_VALUE : (v.loc().sub(a$.loc())).ang(); }
+        });
+        convexHull.add(new Edge(a, b)); a = b; if (a == start) break;
+      }
     }
 
     void tryNextEdge() {
@@ -160,11 +160,12 @@ public final class Mesh {
         candidateVertices = Iterables.filter(vertices, new Predicate<Vertex>() { public boolean apply(Vertex vertex) {
           return !edge.vertices().contains(vertex); } });
       } else {
-        if (edge.onConvexHull(vertices)) return;
+        if (convexHull.contains(edge)) return;
         final Side side = line.side(previousVertex.loc()).opposite();
         candidateVertices = Iterables.filter(vertices, new Predicate<Vertex>() { public boolean apply(Vertex vertex) {
           return !edge.vertices().contains(vertex) && line.side(vertex.loc()) == side; } });
       }
+      if (!candidateVertices.iterator().hasNext()) return;
       final Vertex v = Ordering.natural().onResultOf(new Function<Vertex, Double>() { public Double apply(Vertex v) {
         return line.bulge(v.loc()); }}).min(candidateVertices);
       Triangle t = new Triangle(edge.a(), edge.b(), v);
