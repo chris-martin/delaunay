@@ -16,6 +16,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
+import java.awt.geom.Line2D;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -36,6 +37,7 @@ import org.chris_martin.delaunay.Mesh.VertexPhysics;
 import static com.google.common.collect.Lists.newArrayList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
 import static org.chris_martin.delaunay.Geometry.aToB;
+import static org.chris_martin.delaunay.Geometry.angleVec;
 import static org.chris_martin.delaunay.Geometry.xy;
 
 public class Graphics {
@@ -51,6 +53,8 @@ public class Graphics {
 
   static final int numberOfPoints = 100;
 
+  int fps = 30, physicsPerSecond = 30;
+
   Dimension screenSize = new Dimension(800, 600);
   Mesh mesh;
   Random random = new Random();
@@ -59,11 +63,22 @@ public class Graphics {
   PainterList<Edge> edgePainter;
   PainterList<Triangle> trianglePainter;
   Corner marker;
+  Mousing mousing = new Mousing();
 
   public Graphics() {
     frame = new JFrame("Triangulation");
     frame.setDefaultCloseOperation(EXIT_ON_CLOSE);
+    frame.addKeyListener(new Keying());
     restart();
+
+    new Timer(1000/fps, new ActionListener() { public void actionPerformed(ActionEvent e) {
+      frame.repaint();
+    }}).start();
+
+    final double physicsTimeStep = 1000./physicsPerSecond;
+    new Timer((int) physicsTimeStep, new ActionListener() { public void actionPerformed(ActionEvent e) {
+      if (mesh != null) mesh.physics(physicsTimeStep);
+    }}).start();
   }
 
   void restart() {
@@ -82,28 +97,14 @@ public class Graphics {
     final PainterComponent comp = new PainterComponent(
       new Background(), trianglePainter, edgePainter, vertexPainter);
     comp.setPreferredSize(screenSize);
-    frame.setContentPane(comp);
-
-    Mousing mousing = new Mousing();
     comp.addMouseListener(mousing);
     comp.addMouseMotionListener(mousing);
 
-    frame.addKeyListener(new Keying());
+    frame.getContentPane().removeAll();
+    frame.getContentPane().add(comp);
 
     frame.pack();
     frame.setVisible(true);
-
-    int fps = 30;
-    new Timer(1000/fps, new ActionListener() { public void actionPerformed(ActionEvent e) {
-      frame.repaint();
-    }}).start();
-
-    int physicsPerSecond = 30;
-    final double physicsTimeStep = 1000./physicsPerSecond;
-    new Timer((int) physicsTimeStep, new ActionListener() { public void actionPerformed(ActionEvent e) {
-      //mesh.physics(physicsTimeStep);
-    }}).start();
-
   }
 
   class Mousing extends MouseAdapter {
@@ -130,17 +131,22 @@ public class Graphics {
 
   class Keying extends KeyAdapter {
     public void keyPressed(KeyEvent e) {
-      System.out.println(e.getKeyChar());
       char C = e.getKeyChar();
       char c = Character.toLowerCase(C);
       boolean upper = C != c;
       if (marker != null) {
-        if (c == 's') marker = marker.swing(upper);
-        if (c == 'u') marker = marker.unswing(upper);
-        if (c == 'n') marker = marker.next();
-        if (c == 'p') marker = marker.prev();
+        switch (c) {
+          case 's': marker = nvl(marker.swing(upper), marker); break;
+          case 'u': marker = nvl(marker.unswing(upper), marker); break;
+          case 'n': marker = marker.next(); break;
+          case 'p': marker = marker.prev(); break;
+        }
+      }
+      switch (c) {
+        case 'r': restart(); break;
       }
     }
+    private <T> T nvl(T a, T b) { return a == null ? b : a; }
   }
 
   void mouseMotion(Line motion) {
@@ -148,16 +154,21 @@ public class Graphics {
 
   List<VertexConfig> initialPoints() {
     List<VertexConfig> ps = newArrayList();
-    for (Vec p : Arrays.<Vec>asList(xy(25, 25), xy(775, 25))) ps.add(new VertexConfig(p, VertexPhysics.PINNED));
-    for (Vec p : Arrays.<Vec>asList(xy(25, 575), xy(775, 575), xy(400, 20),
-      xy(400, 580), xy(20, 300), xy(780, 300))) ps.add(new VertexConfig(p, VertexPhysics.FREE));
-    for (int i = 0; i < numberOfPoints; i++) ps.add(new VertexConfig(randomPoint(), VertexPhysics.FREE));
+    double top = 50, padX = 50, screenWidth = 800, midX = screenWidth/2,
+      screenHeight = 600, bottom = screenHeight-100, midY = (top+bottom)/2;
+    for (Vec p : Arrays.<Vec>asList(xy(padX, top), xy(screenWidth-padX, top), xy(midX, top+20),
+        xy((padX+midX)/2, top-10), xy((screenWidth-padX+midX)/2, top-10)))
+      ps.add(new VertexConfig(p, VertexPhysics.PINNED));
+    for (Vec p : Arrays.<Vec>asList(xy(padX, bottom), xy(screenWidth-padX, bottom),
+      xy(midX, bottom+5), xy(padX-5, midY), xy(screenWidth-padX+5, midY)))
+      ps.add(new VertexConfig(p, VertexPhysics.FREE));
+    for (VertexConfig vc : ps) vc.loc = vc.loc.add(angleVec(2*Math.PI*random.nextDouble(), 3*random.nextDouble()));
+    double p = 20, rPadX = padX+p, rTop = top+p, rBottom = bottom-p;
+    for (int i = 0; i < numberOfPoints; i++) ps.add(new VertexConfig(
+      xy( rPadX + random.nextDouble() * (screenWidth - 2*rPadX),
+          rTop + random.nextDouble() * (rBottom-rTop) ), VertexPhysics.FREE));
     return ps;
   }
-
-  Vec randomPoint() { double p = 50;
-    return xy( p + random.nextDouble() * (screenSize.width - 2*p),
-               p + random.nextDouble() * (screenSize.height - 2*p) ); }
 
   static class PainterComponent extends JPanel {
     private final Painter painter; PainterComponent(Painter painter) { this.painter = painter; }
@@ -179,7 +190,6 @@ public class Graphics {
     public void add(P p) { painters.add(p); }
   }
 
-
   private static final int vertex_size = 5;
   private static final Stroke vertex_stroke = new BasicStroke(2);
   class Vertex implements Painter {
@@ -199,7 +209,7 @@ public class Graphics {
     public void paint(Graphics2D g) {
       Vec a = meshEdge.a().loc(), b = meshEdge.b().loc();
       g.setStroke(stroke); g.setColor(transition(strokeColor, flashColor, getFlash()));
-      g.drawLine((int) a.x(), (int) a.y(), (int) b.x(), (int) b.y());
+      g.draw(new Line2D.Double(a.x(), a.y(), b.x(), b.y()));
     }
     Line line() { return meshEdge.line(); }
     Long flashStart;

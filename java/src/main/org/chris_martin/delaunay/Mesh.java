@@ -1,21 +1,39 @@
 package org.chris_martin.delaunay;
 
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
+import java.util.Set;
+
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
-import com.google.common.cache.*;
-import com.google.common.collect.*;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Ordering;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Side;
 import org.chris_martin.delaunay.Geometry.Vec;
-
-import java.util.*;
-import java.util.Map.Entry;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Arrays.asList;
 import static java.util.Collections.min;
 import static java.util.Collections.unmodifiableCollection;
-import static org.chris_martin.delaunay.Geometry.*;
+import static org.chris_martin.delaunay.Geometry.aToB;
+import static org.chris_martin.delaunay.Geometry.circle;
+import static org.chris_martin.delaunay.Geometry.origin;
+import static org.chris_martin.delaunay.Geometry.xy;
 import static org.testng.collections.Lists.newArrayList;
 import static org.testng.collections.Maps.newHashMap;
 
@@ -36,13 +54,16 @@ public final class Mesh {
   public Mesh() {}
   public Mesh(Collection<VertexConfig> points) { setPoints(points); }
 
-  private static final double GRAVITY = .001;
-  private static final double SPRING_RATE = .3;
+  private static final double GRAVITY = 0.04;
+  private static final double SPRING = .05;
+  private static final double INERTIA = 10;
+  private static final double DAMPING = .0001;
 
   public void setPoints(Collection<VertexConfig> points) {
     Delaunay d = new Delaunay(points);
     triangles = d.triangles;
     vertices = d.vertices;
+
   }
 
   public Collection<Edge> edges() {
@@ -53,43 +74,40 @@ public final class Mesh {
 
   public void physics(double timeStep) {
     for (Vertex v : vertices) {
-      v.nextMove = pointAndStep(v.loc, v.velocity);
+      v.nextVelocity = v.velocity;
     }
+    Collections.shuffle(vertices);
     for (int i = 0; i < 20; i++) {
       for (Vertex v : vertices) {
-        System.out.println(v);
         if (v.physics == VertexPhysics.FREE) {
-          Vec totalForce = xy(0, GRAVITY * timeStep);
-          for (Vertex adj : v.adj()) {
-            Vec adjNextPosition = adj.nextMove.b();
+          Vec accel = xy(0, GRAVITY);
+          List<Vertex> adjs = newArrayList();
+          for (Vertex q : v.adj()) adjs.add(q);
+          Collections.shuffle(adjs);
+          for (Vertex adj : adjs) {
             double desiredLength = springLength.getUnchecked(new Edge(v, adj));
-            Vec vToAdj = v.loc().sub(adjNextPosition);
-            double actualLength = vToAdj.mag();
+            double actualLength = adj.nextPosition(timeStep).sub(v.nextPosition(timeStep)).mag();
             double stretch = actualLength - desiredLength;
-            Vec force = vToAdj.mag(stretch * SPRING_RATE * timeStep);
-            totalForce = totalForce.add(force);
+            accel = accel.add(adj.loc.sub(v.loc).mag(stretch * SPRING));
           }
-          v.nextMove = aToB(v.nextMove.a(), v.nextMove.b().add(totalForce));
+          v.nextVelocity = v.velocity.mult(INERTIA-1).add(accel).div(INERTIA);
+          v.nextVelocity = v.nextVelocity.mag(Math.max(0, v.nextVelocity.mag() - DAMPING));
         }
       }
     }
     for (Vertex v : vertices) {
-      v.loc = v.nextMove.b();
-      v.velocity = v.nextMove.ab().div(timeStep);
-      v.nextMove = null;
+      v.loc = v.nextPosition(timeStep);
+      v.velocity = v.nextVelocity;
+      v.nextVelocity = null;
     }
   }
 
   public enum VertexPhysics { PINNED, FREE }
 
   public static class VertexConfig {
-    final Vec loc;
-    final VertexPhysics physics;
+    Vec loc; VertexPhysics physics;
     public VertexConfig(Vec loc, VertexPhysics physics) {
-      this.loc = loc;
-      this.physics = physics;
-    }
-  }
+      this.loc = loc; this.physics = physics; } }
 
   public class Vertex {
     private final int id = ++previousVertexId; public int id() { return id; }
@@ -98,8 +116,8 @@ public final class Mesh {
     private final VertexPhysics physics;
     private Vertex(VertexConfig config) { this.loc = config.loc; this.physics = config.physics; }
     private Corner corner; public Corner corner() { return corner; }
-    private Vec velocity = origin();
-    private Line nextMove;
+    private Vec velocity = origin(), nextVelocity;
+    Vec nextPosition(double timeStep) { return nextVelocity.mult(timeStep).add(loc); }
     public Iterable<Vertex> adj() { return new Iterable<Vertex>() {
       public Iterator<Vertex> iterator() { return adjIter(); } }; }
     public Iterator<Vertex> adjIter() { return new Iterator<Vertex>() {
@@ -173,7 +191,7 @@ public final class Mesh {
       if (points.size() < 3) throw new IllegalArgumentException();
       for (VertexConfig p : points) vertices.add(new Vertex(p));
       calculateConvexHull();
-      for (Edge edge : convexHull) { edges.add(edge); openEdges.put(edge, null); }
+      for (Edge edge : convexHull.subList(0, 1)) { edges.add(edge); openEdges.put(edge, null); }
       while (openEdges.size() != 0) tryNextEdge();
       calculateSwing();
     }
