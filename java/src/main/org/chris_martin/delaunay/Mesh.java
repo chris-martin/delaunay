@@ -55,44 +55,34 @@ public final class Mesh {
   }
 
   public class Vertex {
-    private final int id = ++previousVertexId;
-    private Vec loc;
-    private Corner corner;
-    private Vertex(Vec loc) { this.loc = loc; }
-    public int id() { return id; }
-    public Vec loc() { return loc; }
-    public Corner corner() { return corner; }
+    private final int id = ++previousVertexId; public int id() { return id; }
     public int hashCode() { return id; }
+    private Vec loc; public Vec loc() { return loc; }
+    private Vertex(Vec loc) { this.loc = loc; }
+    private Corner corner; public Corner corner() { return corner; }
   }
 
   public class Corner {
-    private Triangle triangle;
-    private Vertex vertex;
-    private Swings swings = new Swings();
-    private Corner next, prev;
+    private Triangle triangle; private Corner next, prev;
+    private Vertex vertex; private Swings swings = new Swings();
     private Corner(Vertex vertex, Triangle triangle) {
       this.vertex = vertex; this.triangle = triangle;
       if (vertex.corner == null) vertex.corner = this; }
-    public Corner next() { return next; }
-    public Corner prev() { return prev; }
+    public Vertex vertex() { return vertex; }
+    public Corner next() { return next; } public Corner prev() { return prev; }
     public Corner swing(boolean isSuper) { return swings.next.get(isSuper); }
     public Corner unswing(boolean isSuper) { return swings.prev.get(isSuper); }
   }
-  private class Swings {
-    Swing prev = new Swing(), next = new Swing();
-  }
-  private class Swing {
-    Corner corner; boolean isSuper;
-    Corner get(boolean allowSuper) { return isSuper && !allowSuper ? null : corner; }
-  }
+  private class Swings { Swing prev = new Swing(), next = new Swing(); }
+  private class Swing { Corner corner; boolean isSuper;
+    Corner get(boolean allowSuper) { return isSuper && !allowSuper ? null : corner; } }
 
   public class Edge {
     private final Vertex a, b;
     private Edge(Vertex a, Vertex b) {
       boolean flip = a.id > b.id;
       this.a = flip ? b : a; this.b = flip ? a : b; }
-    public Vertex a() { return a; }
-    public Vertex b() { return b; }
+    public Vertex a() { return a; } public Vertex b() { return b; }
     public List<Vertex> vertices() { return asList(a(), b()); }
     public Line line() { return aToB(a.loc, b.loc); }
     public boolean equals(Object o) {
@@ -111,6 +101,7 @@ public final class Mesh {
       this.a = new Corner(xs[0].v, this); this.b = new Corner(xs[1].v, this); this.c = new Corner(xs[2].v, this);
       initNextPrev();
     }
+    public Corner a() { return a; } public Corner b() { return b; } public Corner c() { return c; }
     private void initNextPrev() { a.next = b; b.next = c; c.next = a; a.prev = c; b.prev = a; c.prev = b; }
     public List<Corner> corners() { return asList(a, b, c); }
     public List<Edge> edges() { Vertex a = this.a.vertex, b = this.b.vertex, c = this.c.vertex;
