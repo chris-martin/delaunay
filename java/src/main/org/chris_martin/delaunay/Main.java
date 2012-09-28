@@ -1,13 +1,12 @@
 package org.chris_martin.delaunay;
 
-import com.google.common.util.concurrent.AbstractScheduledService;
-import com.google.common.util.concurrent.AbstractScheduledService.Scheduler;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Vec;
 
-
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
@@ -15,8 +14,6 @@ import java.awt.geom.Path2D;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
@@ -26,11 +23,7 @@ import static org.chris_martin.delaunay.Geometry.xy;
 public class Main {
 
   public static void main(String[] args) {
-    SwingUtilities.invokeLater(new Runnable() {
-      public void run() {
-        new Main();
-      }
-    });
+    new Main();
   }
 
   static final Color backgroundColor = new Color(150, 170, 200);
@@ -77,11 +70,10 @@ public class Main {
     frame.pack();
     frame.setVisible(true);
 
-    new AbstractScheduledService() {
-      protected void runOneIteration() throws Exception { frame.repaint(); }
-      protected Scheduler scheduler() {
-        int fps = 30; return Scheduler.newFixedRateSchedule(0, 1000 / fps, TimeUnit.MILLISECONDS); }
-    }.start();
+    int fps = 15;
+    new Timer(1000/fps, new ActionListener() { public void actionPerformed(ActionEvent e) {
+      frame.repaint();
+    }}).start();
   }
 
   class Mousing extends MouseAdapter {
