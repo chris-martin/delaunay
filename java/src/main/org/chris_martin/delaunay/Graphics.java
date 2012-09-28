@@ -116,8 +116,14 @@ public class Graphics {
     Vec a;
 
     public void mouseMoved(MouseEvent e) {
+      mouseMoved(e, false);
+    }
+    public void mouseDragged(MouseEvent e) {
+      mouseMoved(e, true);
+    }
+    void mouseMoved(MouseEvent e, boolean drag) {
       Vec b = xy(e);
-      if (a != null) mouseMotion(aToB(a, b));
+      if (a != null) mouseMotion(aToB(a, b), drag);
       a = b;
     }
     public void mouseExited(MouseEvent e) {
@@ -127,8 +133,12 @@ public class Graphics {
     public void mousePressed(MouseEvent e) {
       final Vec p = xy(e);
       Mesh.Triangle t = findTriangle(p);
-      marker = t == null ? null : Ordering.natural().onResultOf(new Function<Corner, Double>() {
-        public Double apply(Corner c) { return p.sub(c.vertex().loc()).mag(); }}).min(t.corners());
+      if (cut) {
+        mesh.remove(t);
+      } else {
+        marker = t == null ? null : Ordering.natural().onResultOf(new Function<Corner, Double>() {
+          public Double apply(Corner c) { return p.sub(c.vertex().loc()).mag(); }}).min(t.corners());
+      }
     }
     Mesh.Triangle findTriangle(Vec p) {
       for (Mesh.Triangle t : mesh.triangles()) if (t.contains(p)) return t; return null; }
@@ -151,14 +161,14 @@ public class Graphics {
       }
       switch (c) {
         case 'r': restart(); break;
-        case 'c': cut = true; break;
+        case 'c': cut = true; System.out.println("press"); break;
       }
     }
     public void keyReleased(KeyEvent e) {
       char C = e.getKeyChar();
       char c = Character.toLowerCase(C);
       switch (c) {
-        case 'c': cut = false; break;
+        case 'c': cut = false; System.out.println("release"); break;
       }
     }
     Corner markerSwing(Swing swing, boolean allowSuper) {
@@ -166,9 +176,10 @@ public class Graphics {
     }
   }
 
-  void mouseMotion(Line motion) {
+  void mouseMotion(Line motion, boolean drag) {
+    System.out.println(cut);
     for (Edge e : edgePainter.painters) if (Geometry.overlap(motion, e.line())) {
-      if (cut) {
+      if (cut && drag) {
         mesh.remove(e.meshEdge);
         rebuildPainters();
       } else {

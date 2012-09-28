@@ -102,7 +102,17 @@ public final class Mesh {
   }
 
   public void remove(Edge e) { for (Triangle t : e.triangles()) remove(t); }
-  public void remove(Triangle t) { /* todo */ }
+  public void remove(Triangle t) {
+    Corner earCorner = t.earCorner();
+    if (earCorner != null) {
+      earCorner.next.swings.prev.corner.swings.next = earCorner.next.swings.next;
+      earCorner.prev.swings.next.corner.swings.prev = earCorner.prev.swings.prev;
+      vertices.remove(earCorner.vertex);
+    } else {
+      return;
+    }
+    triangles.remove(t);
+  }
 
   public enum VertexPhysics { PINNED, FREE }
 
@@ -185,6 +195,8 @@ public final class Mesh {
     public List<Line> lines() { Vec a = this.a.vertex.loc, b = this.b.vertex.loc, c = this.c.vertex.loc;
       return asList(aToB(a, b), aToB(b, c), aToB(c, a)); }
     public boolean contains(Vec p) { for (Line l : lines()) if (l.side(p) != Side.LEFT) return false; return true; }
+    public Corner earCorner() {
+      for (Corner corner : asList(a, b, c)) if (corner.swings.next.corner == corner) return corner; return null; }
   }
 
   private class Delaunay {
