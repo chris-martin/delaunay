@@ -80,6 +80,8 @@ public final class Geometry {
   }
   public static Vec xy(double x, double y) { return x == 0 && y == 0 ? ORIGIN : new XY(x, y); }
   public static Vec xy(Number x, Number y) { return xy(x.doubleValue(), y.doubleValue()); }
+  public static Vec xy(java.awt.Point p) { return new XY(p.x, p.y); }
+  public static Vec xy(java.awt.event.MouseEvent e) { return new XY(e.getX(), e.getY()); }
 
   private static class Ang extends BaseVec {
     final double ang, mag; double x, y; boolean hasXy;
@@ -212,6 +214,9 @@ public final class Geometry {
     double x = ((x1*y2-y1*x2)*(x3-x4) - (x1-x2)*(x3*y4-y3*x4)) / d;
     double y = ((x1*y2-y1*x2)*(y3-y4) - (y1-y2)*(x3*y4-y3*x4)) / d;
     return xy(x, y); }
+
+  public static boolean overlap(Line ab, Line cd) { Vec a = ab.a(), b = ab.b(), c = cd.a(), d = cd.b();
+    return ab.side(c) != ab.side(d) && cd.side(a) != cd.side(b); }
 
   public static interface Circle {
     Vec center();

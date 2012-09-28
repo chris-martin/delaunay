@@ -1,24 +1,14 @@
 package org.chris_martin.delaunay;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
-
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Ordering;
+import com.google.common.collect.*;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Side;
 import org.chris_martin.delaunay.Geometry.Vec;
+
+import java.util.*;
+import java.util.Map.Entry;
 
 import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Arrays.asList;

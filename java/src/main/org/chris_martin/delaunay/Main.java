@@ -1,22 +1,36 @@
 package org.chris_martin.delaunay;
 
+import com.google.common.util.concurrent.AbstractScheduledService;
+import com.google.common.util.concurrent.AbstractScheduledService.Scheduler;
+import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Vec;
+
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
+import java.util.Date;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
+import static org.chris_martin.delaunay.Geometry.aToB;
 import static org.chris_martin.delaunay.Geometry.xy;
 
 public class Main {
 
   public static void main(String[] args) {
-    new Main();
+    SwingUtilities.invokeLater(new Runnable() {
+      public void run() {
+        new Main();
+      }
+    });
   }
 
   static final Color backgroundColor = new Color(150, 170, 200);
@@ -29,8 +43,13 @@ public class Main {
   Mesh mesh;
   Random random = new Random();
   JFrame frame;
+  PainterList<Vertex> vertexPainter;
+  PainterList<Edge> edgePainter;
+  PainterList<Triangle> trianglePainter;
 
   public Main() {
+    frame = new JFrame("Triangulation");
+    frame.setDefaultCloseOperation(EXIT_ON_CLOSE);
     restart();
   }
 
@@ -38,24 +57,48 @@ public class Main {
 
     mesh = new Mesh(initialPoints());
 
-    PainterList vertexPainter = new PainterList();
+    vertexPainter = painterList();
     for (Mesh.Vertex v : mesh.vertices()) vertexPainter.add(new Vertex(v));
 
-    PainterList edgePainter = new PainterList();
+    edgePainter = painterList();
     for (Mesh.Edge e : mesh.edges()) edgePainter.add(new Edge(e));
 
-    PainterList trianglePainter = new PainterList();
+    trianglePainter = painterList();
     for (Mesh.Triangle t : mesh.triangles()) trianglePainter.add(new Triangle(t));
 
-    frame = new JFrame("Triangulation");
-    frame.setDefaultCloseOperation(EXIT_ON_CLOSE);
-    PainterComponent comp = new PainterComponent(new PainterList(
-      new Background(), trianglePainter, edgePainter, vertexPainter));
+    final PainterComponent comp = new PainterComponent(
+      new Background(), trianglePainter, edgePainter, vertexPainter);
     comp.setPreferredSize(screenSize);
     frame.setContentPane(comp);
+
+    Mousing mousing = new Mousing();
+    comp.addMouseListener(mousing);
+    comp.addMouseMotionListener(mousing);
     frame.pack();
     frame.setVisible(true);
+
+    new AbstractScheduledService() {
+      protected void runOneIteration() throws Exception { frame.repaint(); }
+      protected Scheduler scheduler() {
+        int fps = 30; return Scheduler.newFixedRateSchedule(0, 1000 / fps, TimeUnit.MILLISECONDS); }
+    }.start();
   }
+
+  class Mousing extends MouseAdapter {
+    Vec a;
+
+    public void mouseMoved(MouseEvent e) {
+      Vec b = xy(e);
+      if (a != null) mouseMotion(aToB(a, b));
+      a = b;
+    }
+    public void mouseExited(MouseEvent e) {
+      a = null;
+    }
+  }
+
+  void mouseMotion(Line motion) {
+    for (Edge e : edgePainter.painters) if (Geometry.overlap(motion, e.line())) e.flash(); }
 
   List<Vec> initialPoints() {
     List<Vec> ps = newArrayList(xy(25, 25), xy(775, 25), xy(25, 575),
@@ -70,6 +113,7 @@ public class Main {
 
   static class PainterComponent extends JPanel {
     private final Painter painter; PainterComponent(Painter painter) { this.painter = painter; }
+    PainterComponent(Painter... ps) { this(painterList(ps)); }
     public void paint(Graphics g_) { super.paintComponent(g_);
       Graphics2D g = ((Graphics2D) g_);
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -77,11 +121,14 @@ public class Main {
 
   interface Painter { void paint(Graphics2D g); }
 
-  static class PainterList implements Painter {
-    private final List<Painter> painters = newArrayList();
-    public PainterList(Painter ... ps) { for (Painter p : ps) add(p); }
-    public void paint(Graphics2D g) { for (Painter p : painters) p.paint(g); }
-    public void add(Painter p) { painters.add(p); }
+  static <P extends Painter> PainterList<P> painterList() { return new PainterList<P>(); }
+  static <P extends Painter> PainterList<P> painterList(P... ps) { return new PainterList<P>(ps); }
+  static class PainterList<P extends Painter> implements Painter {
+    private final List<P> painters = newArrayList();
+    public PainterList() {}
+    public PainterList(P... ps) { for (P p : ps) add(p); }
+    public void paint(Graphics2D g) { for (P p : painters) p.paint(g); }
+    public void add(P p) { painters.add(p); }
   }
 
   static class Vertex implements Painter {
@@ -101,12 +148,22 @@ public class Main {
 
   static class Edge implements Painter {
     private static final Stroke stroke = new BasicStroke(2);
+    private static final Color flashColor = new Color(255, 0, 255);
     private final Mesh.Edge meshEdge; Edge(Mesh.Edge meshEdge) { this.meshEdge = meshEdge; }
     public void paint(Graphics2D g) {
       Vec a = meshEdge.a().loc(), b = meshEdge.b().loc();
-      g.setStroke(stroke); g.setColor(strokeColor);
+      g.setStroke(stroke); g.setColor(transition(strokeColor, flashColor, getFlash()));
       g.drawLine((int) a.x(), (int) a.y(), (int) b.x(), (int) b.y());
     }
+    Line line() { return meshEdge.line(); }
+    Long flashStart;
+    void flash() { flashStart = new Date().getTime(); }
+    double getFlash() {
+      if (flashStart != null) {
+        long d = new Date().getTime() - flashStart;
+        if (d > 1000) flashStart = null; else return (1000-d)/1000.;
+      }
+      return 0; }
   }
 
   static class Triangle implements Painter {
@@ -126,5 +183,11 @@ public class Main {
       g.setColor(backgroundColor); g.fillRect(0, 0, rect.width, rect.height);
     }
   }
+
+  static Color transition(Color a, Color b, double t) {
+    return new Color(
+      a.getRed() + (int) (t * b.getRed()),
+      a.getGreen() + (int) (t * b.getGreen()),
+      a.getBlue() + (int) (t * b.getBlue()) ); }
 
 }
