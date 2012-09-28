@@ -63,7 +63,6 @@ public final class Mesh {
     Delaunay d = new Delaunay(points);
     triangles = d.triangles;
     vertices = d.vertices;
-
   }
 
   public Collection<Edge> edges() {
@@ -82,7 +81,7 @@ public final class Mesh {
         if (v.physics == VertexPhysics.FREE) {
           Vec accel = xy(0, GRAVITY);
           List<Vertex> adjs = newArrayList();
-          for (Vertex q : v.adj()) adjs.add(q);
+          for (Corner c : v.corners()) adjs.add(c.next.vertex);
           Collections.shuffle(adjs);
           for (Vertex adj : adjs) {
             double desiredLength = springLength.getUnchecked(new Edge(v, adj));
@@ -102,6 +101,9 @@ public final class Mesh {
     }
   }
 
+  public void remove(Edge e) { for (Triangle t : e.triangles()) remove(t); }
+  public void remove(Triangle t) { /* todo */ }
+
   public enum VertexPhysics { PINNED, FREE }
 
   public static class VertexConfig {
@@ -118,15 +120,14 @@ public final class Mesh {
     private Corner corner; public Corner corner() { return corner; }
     private Vec velocity = origin(), nextVelocity;
     Vec nextPosition(double timeStep) { return nextVelocity.mult(timeStep).add(loc); }
-    public Iterable<Vertex> adj() { return new Iterable<Vertex>() {
-      public Iterator<Vertex> iterator() { return adjIter(); } }; }
-    public Iterator<Vertex> adjIter() { return new Iterator<Vertex>() {
+    public Iterable<Corner> corners() { return new Iterable<Corner>() {
+      public Iterator<Corner> iterator() { return cornersIter(); } }; }
+    public Iterator<Corner> cornersIter() { return new Iterator<Corner>() {
       Corner c = Vertex.this.corner;
       public boolean hasNext() { return c != null; }
-      public Vertex next() { if (c == null) throw new NoSuchElementException();
-        Vertex next = c.next().vertex; c = c.swing(true); if (c == Vertex.this.corner) c = null; return next; }
-      public void remove() { throw new UnsupportedOperationException(); }
-    }; }
+      public Corner next() { if (c == null) throw new NoSuchElementException();
+        Corner retval = c; c = c.swing().next().corner(); if (c == Vertex.this.corner) c = null; return retval; }
+      public void remove() { throw new UnsupportedOperationException(); }}; }
   }
 
   public class Corner {
@@ -138,12 +139,14 @@ public final class Mesh {
     public Triangle triangle() { return triangle; }
     public Vertex vertex() { return vertex; }
     public Corner next() { return next; } public Corner prev() { return prev; }
-    public Corner swing(boolean isSuper) { return swings.next.get(isSuper); }
-    public Corner unswing(boolean isSuper) { return swings.prev.get(isSuper); }
+    public Swings swing() { return swings; }
   }
-  private class Swings { Swing prev = new Swing(), next = new Swing(); }
-  private class Swing { Corner corner; boolean isSuper;
-    Corner get(boolean allowSuper) { return isSuper && !allowSuper ? null : corner; } }
+  public static class Swings {
+    private Swing prev = new Swing(), next = new Swing();
+    public Swing prev() { return prev; } public Swing next() { return next; } }
+  public static class Swing {
+    private Corner corner; public Corner corner() { return corner; }
+    private boolean isSuper; public boolean isSuper() { return isSuper; } }
 
   public class Edge {
     private final Vertex a, b;
@@ -156,6 +159,11 @@ public final class Mesh {
     public boolean equals(Object o) {
       return this == o || (o instanceof Edge && a == ((Edge) o).a && b == ((Edge) o).b); }
     public int hashCode() { return 31 * a.hashCode() + b.hashCode(); }
+    public List<Triangle> triangles() {
+      List<Triangle> ts = newArrayList(2);
+      Corner c1=null; for (Corner c : a.corners()) if (c.next.vertex == b) c1 = c; if (c1!=null) ts.add(c1.triangle);
+      Corner c2=null; for (Corner c : b.corners()) if (c.next.vertex == a) c2 = c; if (c2!=null) ts.add(c2.triangle);
+      return ts; }
   }
 
   public class Triangle {

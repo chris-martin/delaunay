@@ -31,6 +31,7 @@ import com.google.common.collect.Ordering;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Vec;
 import org.chris_martin.delaunay.Mesh.Corner;
+import org.chris_martin.delaunay.Mesh.Swing;
 import org.chris_martin.delaunay.Mesh.VertexConfig;
 import org.chris_martin.delaunay.Mesh.VertexPhysics;
 
@@ -94,6 +95,11 @@ public class Graphics {
     trianglePainter = painterList();
     for (Mesh.Triangle t : mesh.triangles()) trianglePainter.add(new Triangle(t));
 
+    rebuildPainters();
+  }
+
+  void rebuildPainters() {
+
     final PainterComponent comp = new PainterComponent(
       new Background(), trianglePainter, edgePainter, vertexPainter);
     comp.setPreferredSize(screenSize);
@@ -102,7 +108,6 @@ public class Graphics {
 
     frame.getContentPane().removeAll();
     frame.getContentPane().add(comp);
-
     frame.pack();
     frame.setVisible(true);
   }
@@ -129,6 +134,8 @@ public class Graphics {
       for (Mesh.Triangle t : mesh.triangles()) if (t.contains(p)) return t; return null; }
   }
 
+  boolean cut;
+
   class Keying extends KeyAdapter {
     public void keyPressed(KeyEvent e) {
       char C = e.getKeyChar();
@@ -136,21 +143,38 @@ public class Graphics {
       boolean upper = C != c;
       if (marker != null) {
         switch (c) {
-          case 's': marker = nvl(marker.swing(upper), marker); break;
-          case 'u': marker = nvl(marker.unswing(upper), marker); break;
+          case 's': marker = markerSwing(marker.swing().next(), upper); break;
+          case 'u': marker = markerSwing(marker.swing().prev(), upper); break;
           case 'n': marker = marker.next(); break;
           case 'p': marker = marker.prev(); break;
         }
       }
       switch (c) {
         case 'r': restart(); break;
+        case 'c': cut = true; break;
       }
     }
-    private <T> T nvl(T a, T b) { return a == null ? b : a; }
+    public void keyReleased(KeyEvent e) {
+      char C = e.getKeyChar();
+      char c = Character.toLowerCase(C);
+      switch (c) {
+        case 'c': cut = false; break;
+      }
+    }
+    Corner markerSwing(Swing swing, boolean allowSuper) {
+      return (!swing.isSuper() || allowSuper) ? swing.corner() : marker;
+    }
   }
 
   void mouseMotion(Line motion) {
-    for (Edge e : edgePainter.painters) if (Geometry.overlap(motion, e.line())) e.flash(); }
+    for (Edge e : edgePainter.painters) if (Geometry.overlap(motion, e.line())) {
+      if (cut) {
+        mesh.remove(e.meshEdge);
+        rebuildPainters();
+      } else {
+        e.flash();
+      }
+    } }
 
   List<VertexConfig> initialPoints() {
     List<VertexConfig> ps = newArrayList();
@@ -162,7 +186,7 @@ public class Graphics {
     for (Vec p : Arrays.<Vec>asList(xy(padX, bottom), xy(screenWidth-padX, bottom),
       xy(midX, bottom+5), xy(padX-5, midY), xy(screenWidth-padX+5, midY)))
       ps.add(new VertexConfig(p, VertexPhysics.FREE));
-    for (VertexConfig vc : ps) vc.loc = vc.loc.add(angleVec(2*Math.PI*random.nextDouble(), 3*random.nextDouble()));
+    for (VertexConfig vc : ps) vc.loc = vc.loc.add(angleVec(2 * Math.PI * random.nextDouble(), 3 * random.nextDouble()));
     double p = 20, rPadX = padX+p, rTop = top+p, rBottom = bottom-p;
     for (int i = 0; i < numberOfPoints; i++) ps.add(new VertexConfig(
       xy( rPadX + random.nextDouble() * (screenWidth - 2*rPadX),
