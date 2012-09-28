@@ -14,8 +14,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Arrays.asList;
 import static java.util.Collections.min;
 import static java.util.Collections.unmodifiableCollection;
-import static org.chris_martin.delaunay.Geometry.aToB;
-import static org.chris_martin.delaunay.Geometry.circle;
+import static org.chris_martin.delaunay.Geometry.*;
 import static org.testng.collections.Lists.newArrayList;
 import static org.testng.collections.Maps.newHashMap;
 
@@ -30,9 +29,12 @@ public final class Mesh {
   public Collection<Vertex> vertices() { return unmodifiableCollection(vertices); }
 
   public Mesh() {}
-  public Mesh(Collection<Vec> points) { setPoints(points); }
+  public Mesh(Collection<VertexConfig> points) { setPoints(points); }
 
-  public void setPoints(Collection<Vec> points) {
+  private static final double GRAVITY = .001;
+  private static final double SPRING_RATE = .3;
+
+  public void setPoints(Collection<VertexConfig> points) {
     Delaunay d = new Delaunay(points);
     triangles = d.triangles;
     vertices = d.vertices;
@@ -44,12 +46,44 @@ public final class Mesh {
     return edges;
   }
 
+  public void physics(double timeStep) {
+    for (Vertex v : vertices) {
+      v.nextVelocity = origin();
+    }
+    for (int i = 0; i < 20; i++) {
+      for (Vertex v : vertices) {
+        if (v.physics == VertexPhysics.FREE) {
+          v.nextVelocity = v.velocity.add(xy(0, timeStep * GRAVITY));
+        }
+      }
+    }
+    for (Vertex v : vertices) {
+      v.velocity = v.nextVelocity;
+      v.nextVelocity = null;
+      v.loc = v.loc.add(v.velocity);
+    }
+  }
+
+  public enum VertexPhysics { PINNED, FREE }
+
+  public static class VertexConfig {
+    final Vec loc;
+    final VertexPhysics physics;
+    public VertexConfig(Vec loc, VertexPhysics physics) {
+      this.loc = loc;
+      this.physics = physics;
+    }
+  }
+
   public class Vertex {
     private final int id = ++previousVertexId; public int id() { return id; }
     public int hashCode() { return id; }
     private Vec loc; public Vec loc() { return loc; }
-    private Vertex(Vec loc) { this.loc = loc; }
+    private final VertexPhysics physics;
+    private Vertex(VertexConfig config) { this.loc = config.loc; this.physics = config.physics; }
     private Corner corner; public Corner corner() { return corner; }
+    private Vec velocity = origin();
+    private Vec nextVelocity;
   }
 
   public class Corner {
@@ -106,9 +140,9 @@ public final class Mesh {
     List<Edge> convexHull = newArrayList();
     Map<Edge, Vertex> openEdges = newHashMap();
 
-    Delaunay(Collection<Vec> points) {
+    Delaunay(Collection<VertexConfig> points) {
       if (points.size() < 3) throw new IllegalArgumentException();
-      for (Vec p : points) vertices.add(new Vertex(p));
+      for (VertexConfig p : points) vertices.add(new Vertex(p));
       calculateConvexHull();
       for (Edge edge : convexHull) { edges.add(edge); openEdges.put(edge, null); }
       while (openEdges.size() != 0) tryNextEdge();

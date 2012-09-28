@@ -2,6 +2,8 @@ package org.chris_martin.delaunay;
 
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Vec;
+import org.chris_martin.delaunay.Mesh.VertexConfig;
+import org.chris_martin.delaunay.Mesh.VertexPhysics;
 
 import javax.swing.*;
 import java.awt.*;
@@ -11,10 +13,12 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
 
+import static com.google.common.collect.Lists.asList;
 import static com.google.common.collect.Lists.newArrayList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
 import static org.chris_martin.delaunay.Geometry.aToB;
@@ -70,10 +74,17 @@ public class Main {
     frame.pack();
     frame.setVisible(true);
 
-    int fps = 15;
+    int fps = 30;
     new Timer(1000/fps, new ActionListener() { public void actionPerformed(ActionEvent e) {
       frame.repaint();
     }}).start();
+
+    int physicsPerSecond = 30;
+    final double physicsTimeStep = 1000./physicsPerSecond;
+    new Timer((int) physicsTimeStep, new ActionListener() { public void actionPerformed(ActionEvent e) {
+      mesh.physics(physicsTimeStep);
+    }}).start();
+
   }
 
   class Mousing extends MouseAdapter {
@@ -92,10 +103,12 @@ public class Main {
   void mouseMotion(Line motion) {
     for (Edge e : edgePainter.painters) if (Geometry.overlap(motion, e.line())) e.flash(); }
 
-  List<Vec> initialPoints() {
-    List<Vec> ps = newArrayList(xy(25, 25), xy(775, 25), xy(25, 575),
-      xy(775, 575), xy(400, 20), xy(400, 580), xy(20, 300), xy(780, 300));
-    for (int i = 0; i < numberOfPoints; i++) ps.add(randomPoint());
+  List<VertexConfig> initialPoints() {
+    List<VertexConfig> ps = newArrayList();
+    for (Vec p : Arrays.<Vec>asList(xy(25, 25), xy(775, 25))) ps.add(new VertexConfig(p, VertexPhysics.PINNED));
+    for (Vec p : Arrays.<Vec>asList(xy(25, 575), xy(775, 575), xy(400, 20),
+      xy(400, 580), xy(20, 300), xy(780, 300))) ps.add(new VertexConfig(p, VertexPhysics.FREE));
+    for (int i = 0; i < numberOfPoints; i++) ps.add(new VertexConfig(randomPoint(), VertexPhysics.FREE));
     return ps;
   }
 
