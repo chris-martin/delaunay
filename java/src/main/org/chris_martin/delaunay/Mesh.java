@@ -2,6 +2,7 @@ package org.chris_martin.delaunay;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.cache.*;
 import com.google.common.collect.*;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Side;
@@ -11,6 +12,7 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import static com.google.common.collect.Sets.newHashSet;
+import static java.lang.Math.abs;
 import static java.util.Arrays.asList;
 import static java.util.Collections.min;
 import static java.util.Collections.unmodifiableCollection;
@@ -27,6 +29,10 @@ public final class Mesh {
 
   private List<Vertex> vertices;
   public Collection<Vertex> vertices() { return unmodifiableCollection(vertices); }
+
+  private LoadingCache<Edge, Double> springLength = CacheBuilder.newBuilder().build(
+    new CacheLoader<Edge, Double>() { public Double load(Edge edge) {
+      return edge.a.loc.sub(edge.b.loc).mag(); }});
 
   public Mesh() {}
   public Mesh(Collection<VertexConfig> points) { setPoints(points); }
@@ -48,19 +54,30 @@ public final class Mesh {
 
   public void physics(double timeStep) {
     for (Vertex v : vertices) {
-      v.nextVelocity = origin();
+      v.nextMove = pointAndStep(v.loc, v.velocity);
     }
     for (int i = 0; i < 20; i++) {
       for (Vertex v : vertices) {
+        System.out.println(v);
         if (v.physics == VertexPhysics.FREE) {
-          v.nextVelocity = v.velocity.add(xy(0, timeStep * GRAVITY));
+          Vec totalForce = xy(0, GRAVITY * timeStep);
+          for (Vertex adj : v.adj()) {
+            Vec adjNextPosition = adj.nextMove.b();
+            double desiredLength = springLength.getUnchecked(new Edge(v, adj));
+            Vec vToAdj = v.loc().sub(adjNextPosition);
+            double actualLength = vToAdj.mag();
+            double stretch = actualLength - desiredLength;
+            Vec force = vToAdj.mag(stretch * SPRING_RATE * timeStep);
+            totalForce = totalForce.add(force);
+          }
+          v.nextMove = aToB(v.nextMove.a(), v.nextMove.b().add(totalForce));
         }
       }
     }
     for (Vertex v : vertices) {
-      v.velocity = v.nextVelocity;
-      v.nextVelocity = null;
-      v.loc = v.loc.add(v.velocity);
+      v.loc = v.nextMove.b();
+      v.velocity = v.nextMove.ab().div(timeStep);
+      v.nextMove = null;
     }
   }
 
@@ -83,7 +100,16 @@ public final class Mesh {
     private Vertex(VertexConfig config) { this.loc = config.loc; this.physics = config.physics; }
     private Corner corner; public Corner corner() { return corner; }
     private Vec velocity = origin();
-    private Vec nextVelocity;
+    private Line nextMove;
+    public Iterable<Vertex> adj() { return new Iterable<Vertex>() {
+      public Iterator<Vertex> iterator() { return adjIter(); } }; }
+    public Iterator<Vertex> adjIter() { return new Iterator<Vertex>() {
+      Corner c = Vertex.this.corner;
+      public boolean hasNext() { return c != null; }
+      public Vertex next() { if (c == null) throw new NoSuchElementException();
+        Vertex next = c.next().vertex; c = c.swing(true); if (c == Vertex.this.corner) c = null; return next; }
+      public void remove() { throw new UnsupportedOperationException(); }
+    }; }
   }
 
   public class Corner {

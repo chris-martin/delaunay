@@ -18,7 +18,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.Random;
 
-import static com.google.common.collect.Lists.asList;
 import static com.google.common.collect.Lists.newArrayList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
 import static org.chris_martin.delaunay.Geometry.aToB;
@@ -82,7 +81,7 @@ public class Main {
     int physicsPerSecond = 30;
     final double physicsTimeStep = 1000./physicsPerSecond;
     new Timer((int) physicsTimeStep, new ActionListener() { public void actionPerformed(ActionEvent e) {
-      mesh.physics(physicsTimeStep);
+      //mesh.physics(physicsTimeStep);
     }}).start();
 
   }

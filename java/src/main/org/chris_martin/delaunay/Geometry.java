@@ -36,6 +36,11 @@ public final class Geometry {
     public Vec rot(double ang);
     public Vec rot(Number ang);
 
+    public Vec addX(double o);
+    public Vec addY(double o);
+    public Vec subX(double o);
+    public Vec subY(double o);
+
     /** This is exactly (0, 0). */
     public boolean isOrigin();
 
@@ -58,6 +63,10 @@ public final class Geometry {
     public Vec unit() { return new Ang(ang(), 1); }
     public Vec mult(Number factor) { return mult(factor.doubleValue()); }
     public Vec div(Number divisor) { return div(divisor.doubleValue()); }
+    public Vec addX(double $) { return xy(x()+$, y()); }
+    public Vec addY(double $) { return xy(x(), y()+$); }
+    public Vec subX(double $) { return xy(x()-$, y()); }
+    public Vec subY(double $) { return xy(x(), y()-$); }
     public double dot(Vec o) { return x()*o.x() + y()*o.y(); }
     public double cross(Vec o) { return dot(o.rot90()); }
     public Vec rot(double ang) { return new Ang(ang() + ang, mag()); }
@@ -115,6 +124,10 @@ public final class Geometry {
     public Vec rot180() { return this; }
     public Vec add(Vec o) { return o; }
     public Vec sub(Vec o) { return o.mult(-1); }
+    public Vec addX(double $) { return xy($, 0); }
+    public Vec addY(double $) { return xy(0, $); }
+    public Vec subX(double $) { return xy(-$, 0); }
+    public Vec subY(double $) { return xy(0, -$); }
     public Vec mag(double newMag) { throw new UnsupportedOperationException(); }
     public Vec unit() { throw new UnsupportedOperationException(); }
     public Vec mult(Number factor) { return this; }
@@ -156,7 +169,7 @@ public final class Geometry {
 
   private static abstract class BaseLine implements Line {
     public Side side(Vec p) { return p.sub(a()).cross(b().sub(a())) > 0 ? LEFT : RIGHT; }
-    public Line bisect() { return pointAndDirection(midpoint(), angleVec(ang()).rot90()); }
+    public Line bisect() { return pointAndStep(midpoint(), angleVec(ang()).rot90()); }
     public double bulge(Vec p) { Circle c = circle(a(), b(), p); return c.radius() * side(p).i * side(c.center()).i; }
   }
 
@@ -199,13 +212,13 @@ public final class Geometry {
     public Vec ab() { return ab; }
     public double ang() { return ab.ang(); }
     public double mag() { return ab.mag(); }
-    public Line add(Vec offset) { return pointAndDirection(a.add(offset), ab); }
-    public Line sub(Vec offset) { return pointAndDirection(a.sub(offset), ab); }
+    public Line add(Vec offset) { return pointAndStep(a.add(offset), ab); }
+    public Line sub(Vec offset) { return pointAndStep(a.sub(offset), ab); }
     public Vec midpoint() { return ab.div(2).add(a); }
   }
-  public static Line pointAndDirection(Vec a, Vec ab) { return new PointAndDirection(a, ab); }
-  public static Line pointAndDirection(Vec a, double ang) { return new PointAndDirection(a, angleVec(ang)); }
-  public static Line pointAndDirection(Vec a, Number ang) { return new PointAndDirection(a, angleVec(ang)); }
+  public static Line pointAndStep(Vec a, Vec ab) { return new PointAndDirection(a, ab); }
+  public static Line pointAndStep(Vec a, double ang) { return new PointAndDirection(a, angleVec(ang)); }
+  public static Line pointAndStep(Vec a, Number ang) { return new PointAndDirection(a, angleVec(ang)); }
 
   public static Vec intersect(Line ab, Line cd) { Vec v1 = ab.a(), v2 = ab.b(), v3 = cd.a(), v4 = cd.b();
     // http://en.wikipedia.org/wiki/Line-line_intersection
