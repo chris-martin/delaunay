@@ -225,7 +225,7 @@ public final class Mesh {
       for (Triangle t : triangles) for (Corner c : t.corners()) v2c.put(c.vertex, c);
       for (Collection<Corner> cs : v2c.asMap().values()) {
         for (Corner i : cs) for (Corner j : cs) if (i.next.vertex == j.prev.vertex)
-          { j.swings.next.corner = i; i.swings.next.corner = j; }
+          { j.swings.next.corner = i; i.swings.prev.corner = j; }
         Corner si = null, sj = null;
         for (Corner i : cs) {
           if (i.swings.next.corner == null) si = i;
