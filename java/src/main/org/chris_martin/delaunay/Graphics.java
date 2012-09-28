@@ -46,7 +46,7 @@ public class Graphics {
 
   static final Color backgroundColor = new Color(150, 170, 200);
   static final Color foregroundColor = new Color(40, 120, 240);
-  static final Color markerColor = transition(foregroundColor, Color.white, 0.8);
+  static final Color markerColor = transition(foregroundColor, Color.white, 0.5);
   static final Color strokeColor = Color.black;
 
   static final int numberOfPoints = 100;
@@ -131,10 +131,14 @@ public class Graphics {
   class Keying extends KeyAdapter {
     public void keyPressed(KeyEvent e) {
       System.out.println(e.getKeyChar());
-      if (e.getKeyChar() == 's') {
-        if (marker != null) {
-          marker = marker.swing(false);
-        }
+      char C = e.getKeyChar();
+      char c = Character.toLowerCase(C);
+      boolean upper = C != c;
+      if (marker != null) {
+        if (c == 's') marker = marker.swing(upper);
+        if (c == 'u') marker = marker.unswing(upper);
+        if (c == 'n') marker = marker.next();
+        if (c == 'p') marker = marker.prev();
       }
     }
   }

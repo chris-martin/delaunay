@@ -12,7 +12,6 @@ import java.util.*;
 import java.util.Map.Entry;
 
 import static com.google.common.collect.Sets.newHashSet;
-import static java.lang.Math.abs;
 import static java.util.Arrays.asList;
 import static java.util.Collections.min;
 import static java.util.Collections.unmodifiableCollection;
@@ -157,8 +156,9 @@ public final class Mesh {
     public List<Corner> corners() { return asList(a, b, c); }
     public List<Edge> edges() { Vertex a = this.a.vertex, b = this.b.vertex, c = this.c.vertex;
       return asList(new Edge(a, b), new Edge(b, c), new Edge(c, a)); }
-    public boolean contains(Vec p) {
-      for (Edge e : edges()) if (e.line().side(p) != Side.LEFT) return false; return true; }
+    public List<Line> lines() { Vec a = this.a.vertex.loc, b = this.b.vertex.loc, c = this.c.vertex.loc;
+      return asList(aToB(a, b), aToB(b, c), aToB(c, a)); }
+    public boolean contains(Vec p) { for (Line l : lines()) if (l.side(p) != Side.LEFT) return false; return true; }
   }
 
   private class Delaunay {

@@ -65,8 +65,8 @@ public final class Geometry {
     public Vec div(Number divisor) { return div(divisor.doubleValue()); }
     public Vec addX(double $) { return xy(x()+$, y()); }
     public Vec addY(double $) { return xy(x(), y()+$); }
-    public Vec subX(double $) { return xy(x()-$, y()); }
-    public Vec subY(double $) { return xy(x(), y()-$); }
+    public Vec subX(double $) { return xy(x() - $, y()); }
+    public Vec subY(double $) { return xy(x(), y() - $); }
     public double dot(Vec o) { return x()*o.x() + y()*o.y(); }
     public double cross(Vec o) { return dot(o.rot90()); }
     public Vec rot(double ang) { return new Ang(ang() + ang, mag()); }
@@ -201,6 +201,7 @@ public final class Geometry {
     public Line add(Vec offset) { return new AtoB(offset.add(a), b.add(offset), ab); }
     public Line sub(Vec offset) { return new AtoB(offset.sub(a), b.sub(offset), ab); }
     public Vec midpoint() { return a.add(b).div(2); }
+    public String toString() { return String.format("Line %s to %s", a, b); }
   }
   public static Line aToB(Vec a, Vec b) { return new AtoB(a, b); }
 
