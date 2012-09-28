@@ -118,6 +118,7 @@ public final class Mesh {
     private Corner(Vertex vertex, Triangle triangle) {
       this.vertex = vertex; this.triangle = triangle;
       if (vertex.corner == null) vertex.corner = this; }
+    public Triangle triangle() { return triangle; }
     public Vertex vertex() { return vertex; }
     public Corner next() { return next; } public Corner prev() { return prev; }
     public Corner swing(boolean isSuper) { return swings.next.get(isSuper); }
@@ -156,6 +157,8 @@ public final class Mesh {
     public List<Corner> corners() { return asList(a, b, c); }
     public List<Edge> edges() { Vertex a = this.a.vertex, b = this.b.vertex, c = this.c.vertex;
       return asList(new Edge(a, b), new Edge(b, c), new Edge(c, a)); }
+    public boolean contains(Vec p) {
+      for (Edge e : edges()) if (e.line().side(p) != Side.LEFT) return false; return true; }
   }
 
   private class Delaunay {
