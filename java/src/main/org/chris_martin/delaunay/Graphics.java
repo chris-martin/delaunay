@@ -1,13 +1,6 @@
 package org.chris_martin.delaunay;
 
-import java.awt.BasicStroke;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.Graphics2D;
-import java.awt.Rectangle;
-import java.awt.RenderingHints;
-import java.awt.Shape;
-import java.awt.Stroke;
+import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
@@ -44,6 +37,7 @@ import static org.chris_martin.delaunay.Geometry.xy;
 public class Graphics {
 
   public static void main(String[] args) {
+    //RepeatingReleasedEventsFixer.install();
     new Graphics();
   }
 
@@ -123,28 +117,42 @@ public class Graphics {
     }
     void mouseMoved(MouseEvent e, boolean drag) {
       Vec b = xy(e);
-      if (a != null) mouseMotion(aToB(a, b), drag);
+      if (a != null) {
+        Line motion = aToB(a, b);
+        for (Edge edge : edgePainter.painters) if (Geometry.overlap(motion, edge.line())) {
+          if (drag) {
+            switch (mouseMode) {
+              case SELECT: select(b); break;
+              case DELETE: mesh.remove(edge.meshEdge); rebuildPainters(); break;
+            }
+          } else {
+            edge.flash();
+          }
+        }
+      }
       a = b;
     }
     public void mouseExited(MouseEvent e) {
       a = null;
     }
-
     public void mousePressed(MouseEvent e) {
       final Vec p = xy(e);
-      Mesh.Triangle t = findTriangle(p);
-      if (cut) {
-        mesh.remove(t);
-      } else {
-        marker = t == null ? null : Ordering.natural().onResultOf(new Function<Corner, Double>() {
-          public Double apply(Corner c) { return p.sub(c.vertex().loc()).mag(); }}).min(t.corners());
+      switch (mouseMode) {
+        case SELECT: select(p); break;
+        case DELETE: Mesh.Triangle t = findTriangle(p); if (t != null) mesh.remove(t); break;
       }
+    }
+    void select(final Vec p) {
+      Mesh.Triangle t = findTriangle(p);
+      marker = t == null ? null : Ordering.natural().onResultOf(new Function<Corner, Double>() {
+        public Double apply(Corner c) { return p.sub(c.vertex().loc()).mag(); }}).min(t.corners());
     }
     Mesh.Triangle findTriangle(Vec p) {
       for (Mesh.Triangle t : mesh.triangles()) if (t.contains(p)) return t; return null; }
   }
 
-  boolean cut;
+  public enum MouseMode { SELECT, DELETE, CUT }
+  private MouseMode mouseMode = MouseMode.SELECT;
 
   class Keying extends KeyAdapter {
     public void keyPressed(KeyEvent e) {
@@ -161,31 +169,15 @@ public class Graphics {
       }
       switch (c) {
         case 'r': restart(); break;
-        case 'c': cut = true; System.out.println("press"); break;
-      }
-    }
-    public void keyReleased(KeyEvent e) {
-      char C = e.getKeyChar();
-      char c = Character.toLowerCase(C);
-      switch (c) {
-        case 'c': cut = false; System.out.println("release"); break;
+        case '1': mouseMode = MouseMode.SELECT; break;
+        case '2': mouseMode = MouseMode.DELETE; break;
+        case '3': mouseMode = MouseMode.CUT; break;
       }
     }
     Corner markerSwing(Swing swing, boolean allowSuper) {
       return (!swing.isSuper() || allowSuper) ? swing.corner() : marker;
     }
   }
-
-  void mouseMotion(Line motion, boolean drag) {
-    System.out.println(cut);
-    for (Edge e : edgePainter.painters) if (Geometry.overlap(motion, e.line())) {
-      if (cut && drag) {
-        mesh.remove(e.meshEdge);
-        rebuildPainters();
-      } else {
-        e.flash();
-      }
-    } }
 
   List<VertexConfig> initialPoints() {
     List<VertexConfig> ps = newArrayList();
