@@ -113,10 +113,15 @@ public class Graphics {
     }
 
     public void mouseDragged(MouseEvent event) {
+      Line m;
       switch (mouseMode) {
         case SELECT: select(xy(event)); break;
-        case DELETE: Line m = motion(event); if (m != null) {
+        case DELETE: m = motion(event); if (m != null) {
           for (Mesh.Edge e : mesh.edges()) if (overlap(e.line(), m)) mesh.remove(e);
+          rebuildPainters();
+        } break;
+        case CUT: m = motion(event); if (m != null) {
+          for (Mesh.Edge e : mesh.edges()) if (overlap(e.line(), m)) mesh.cut(e, m);
           rebuildPainters();
         } break;
       }
@@ -141,7 +146,7 @@ public class Graphics {
   }
 
   public enum MouseMode { SELECT, DELETE, CUT }
-  private MouseMode mouseMode = MouseMode.DELETE;
+  private MouseMode mouseMode = MouseMode.CUT;
 
   class Keying extends KeyAdapter {
     public void keyPressed(KeyEvent e) {

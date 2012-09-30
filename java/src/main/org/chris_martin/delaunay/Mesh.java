@@ -30,10 +30,7 @@ import static com.google.common.collect.Sets.newHashSet;
 import static java.util.Arrays.asList;
 import static java.util.Collections.min;
 import static java.util.Collections.unmodifiableCollection;
-import static org.chris_martin.delaunay.Geometry.aToB;
-import static org.chris_martin.delaunay.Geometry.circle;
-import static org.chris_martin.delaunay.Geometry.origin;
-import static org.chris_martin.delaunay.Geometry.xy;
+import static org.chris_martin.delaunay.Geometry.*;
 import static org.testng.collections.Lists.newArrayList;
 import static org.testng.collections.Maps.newHashMap;
 
@@ -114,8 +111,10 @@ public final class Mesh {
     }
   }
 
+  boolean exists(Edge e) { return vertices.contains(e.a) & vertices.contains(e.b); }
+
   public void remove(Edge e) {
-    if (!vertices.contains(e.a) || !vertices.contains(e.b)) return;
+    if (!exists(e)) return;
     for (Triangle t : e.triangles()) remove(t);
   }
   public void remove(Triangle t) {
@@ -133,6 +132,56 @@ public final class Mesh {
       }
     }
     triangles.remove(t);
+    assert meshIsValid();
+  }
+
+  public void cut(final Edge e, final Line cut) {
+    if (!exists(e)) return;
+
+    List<Triangle> ts = e.triangles();
+    if (ts.size() == 0) return;
+
+    final Vertex nv = new Vertex(new VertexConfig(intersect(cut, e.line()), VertexPhysics.FREE));
+    vertices.add(nv);
+    double springFraction = e.a.loc.sub(nv.loc).mag() / e.a.loc.sub(e.b.loc).mag();
+    springLength.put(new Edge(e.a, nv), springLength.getUnchecked(new Edge(e.a, e.b)) * springFraction);
+    springLength.put(new Edge(e.b, nv), springLength.getUnchecked(new Edge(e.a, e.b)) * (1 - springFraction));
+
+    class OldTriangle { Triangle t, x, y; Corner splitCorner;
+      OldTriangle(Triangle t) {
+        triangles.remove(t);
+        splitCorner = Iterables.find(t.corners(), new Predicate<Corner>() {
+          public boolean apply(Corner c) { return !e.vertices().contains(c.vertex); } });
+        x = new Triangle(nv, splitCorner.prev.vertex, splitCorner.vertex);
+        y = new Triangle(nv, splitCorner.vertex, splitCorner.next.vertex);
+        triangles.add(x);
+        triangles.add(y);
+        setSwing(x.a, y.a);
+        setSwing(splitCorner.prev.swings.prev.corner, x.b, splitCorner.prev.swings.prev.isSuper);
+        setSwing(y.c, splitCorner.next.swings.next.corner, splitCorner.next.swings.next.isSuper);
+        setSwing(x.c, splitCorner.swings.next.corner, splitCorner.swings.next.isSuper);
+        setSwing(splitCorner.swings.prev.corner, y.b, splitCorner.swings.prev.isSuper);
+        setSwing(y.b, x.c);
+        splitCorner.vertex.corner = x.c;
+        splitCorner.prev.vertex.corner = x.b;
+        splitCorner.next.vertex.corner = y.c;
+      }
+    }
+    List<OldTriangle> ots = newArrayList();
+    for (Triangle t : ts) ots.add(new OldTriangle(t));
+    if (ots.size() == 2) {
+      for (int i = 0; i < 2; i++) {
+        OldTriangle t1 = ots.get(i), t2 = ots.get((i+1)%2);
+        setSwing(t1.x.b, t2.y.c);
+        setSwing(t2.y.a, t1.x.a);
+      }
+    } else {
+      OldTriangle t1 = ots.get(0);
+      setSwing(t1.x.b, t1.splitCorner.prev.swings.next.corner, t1.splitCorner.prev.swings.next.isSuper);
+      setSwing(t1.splitCorner.next.swings.prev.corner, t1.y.c, t1.splitCorner.next.swings.prev.isSuper);
+      setSwing(t1.y.a, t1.x.a, true);
+    }
+    nv.corner = ots.get(0).x.a;
     assert meshIsValid();
   }
 
@@ -157,8 +206,7 @@ public final class Mesh {
           for (int i = 0; i < 2; i++) {
             List<Corner> section = sections.get(i);
             Corner first = section.get(0), last = section.get(section.size()-1);
-            first.swings.prev.corner = last;
-            last.swings.next.corner = first;
+            setSwing(last, first);
             if (i != 0) {
               Vertex clone = new Vertex(new VertexConfig(v.loc, v.physics));
               clone.corner = first;
@@ -205,6 +253,7 @@ public final class Mesh {
         c = c.swings.next.corner;
         if (c == Vertex.this.corner) c = null;
         assert visited.add(retval);
+        assert triangles.contains(retval.triangle);
         return retval;
       }
       public void remove() { throw new UnsupportedOperationException(); }
@@ -233,6 +282,17 @@ public final class Mesh {
     public Swing copy() { Swing x = new Swing(); x.corner = corner; x.isSuper = isSuper; return x; }
   }
 
+  private static void setSwing(Corner prev, Corner next) {
+    prev.swings.next.corner = next;
+    next.swings.prev.corner = prev;
+  }
+
+  private static void setSwing(Corner prev, Corner next, boolean isSuper) {
+    setSwing(prev, next);
+    prev.swings.next.isSuper = isSuper;
+    next.swings.prev.isSuper = isSuper;
+  }
+
   public class Edge {
     private final Vertex a, b;
     private Edge(Vertex a, Vertex b) {
@@ -254,12 +314,7 @@ public final class Mesh {
   public class Triangle {
     private final Corner a, b, c;
     public Triangle(Vertex a, Vertex b, Vertex c) {
-      // vertices are sorted in clockwise rotation about the circumcenter
-      final Vec cc = circle(a.loc(), b.loc(), c.loc()).center();
-      class X { final double ang; final Vertex v; X(Vertex v) { this.v = v; ang = v.loc().sub(cc).ang(); } }
-      X[] xs = { new X(a), new X(b), new X(c) };
-      Arrays.sort(xs, new Comparator<X>() { public int compare(X a, X b) { return Double.compare(a.ang, b.ang); }});
-      this.a = new Corner(xs[0].v, this); this.b = new Corner(xs[1].v, this); this.c = new Corner(xs[2].v, this);
+      this.a = new Corner(a, this); this.b = new Corner(b, this); this.c = new Corner(c, this);
       initNextPrev();
     }
     public Corner a() { return a; } public Corner b() { return b; } public Corner c() { return c; }
@@ -272,6 +327,7 @@ public final class Mesh {
     public boolean contains(Vec p) { for (Line l : lines()) if (l.side(p) != Side.LEFT) return false; return true; }
     public Corner earCorner() {
       for (Corner corner : asList(a, b, c)) if (corner.swings.next.corner == corner) return corner; return null; }
+    public Corner corner(Vertex v) { for (Corner x : corners()) if (x.vertex == v) return x; return null; }
   }
 
   private class Delaunay {
@@ -325,7 +381,15 @@ public final class Mesh {
       if (!candidateVertices.iterator().hasNext()) return;
       final Vertex v = Ordering.natural().onResultOf(new Function<Vertex, Double>() { public Double apply(Vertex v) {
         return line.bulge(v.loc()); }}).min(candidateVertices);
-      Triangle t = new Triangle(edge.a(), edge.b(), v);
+      Triangle t; {
+        Vertex[] tv = { edge.a(), edge.b(), v };
+        // vertices are sorted in clockwise rotation about the circumcenter
+        final Vec cc = circle(tv[0].loc(), tv[1].loc(), tv[2].loc()).center();
+        class X { final double ang; final Vertex v; X(Vertex v) { this.v = v; ang = v.loc().sub(cc).ang(); } }
+        X[] xs = { new X(tv[0]), new X(tv[1]), new X(tv[2]) };
+        Arrays.sort(xs, new Comparator<X>() { public int compare(X a, X b) { return Double.compare(a.ang, b.ang); }});
+        t = new Triangle(xs[0].v, xs[1].v, xs[2].v);
+      }
       triangles.add(t);
       for (List<Vertex> vertexPair : ImmutableList.of(edge.vertices(), Lists.reverse(edge.vertices()))) {
         Vertex u = vertexPair.get(0), w = vertexPair.get(1); Edge uv = new Edge(u, v);
@@ -337,17 +401,13 @@ public final class Mesh {
       Multimap<Vertex, Corner> v2c = ArrayListMultimap.create();
       for (Triangle t : triangles) for (Corner c : t.corners()) v2c.put(c.vertex, c);
       for (Collection<Corner> cs : v2c.asMap().values()) {
-        for (Corner i : cs) for (Corner j : cs) if (i.next.vertex == j.prev.vertex)
-          { j.swings.next.corner = i; i.swings.prev.corner = j; }
+        for (Corner i : cs) for (Corner j : cs) if (i.next.vertex == j.prev.vertex) setSwing(j, i);
         Corner si = null, sj = null;
         for (Corner i : cs) {
           if (i.swings.next.corner == null) si = i;
           if (i.swings.prev.corner == null) sj = i;
         }
-        if (si != null) {
-          si.swings.next.corner = sj; si.swings.next.isSuper = true;
-          sj.swings.prev.corner = si; sj.swings.prev.isSuper = true;
-        }
+        if (si != null) setSwing(si, sj, true);
       }
     }
 
