@@ -218,7 +218,7 @@ public final class Mesh {
       this.vertex = vertex; this.triangle = triangle;
       if (vertex.corner == null) vertex.corner = this; }
     public Triangle triangle() { return triangle; }
-    public Vertex vertex() { assert vertices.contains(vertex); return vertex; }
+    public Vertex vertex() { return vertex; }
     public Corner next() { return next; } public Corner prev() { return prev; }
     public Swings swing() { return swings; }
   }
