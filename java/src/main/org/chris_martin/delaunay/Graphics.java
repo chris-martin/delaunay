@@ -10,6 +10,7 @@ import java.awt.event.MouseEvent;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Line2D;
+import java.awt.geom.Rectangle2D;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -23,16 +24,11 @@ import com.google.common.base.Function;
 import com.google.common.collect.Ordering;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Vec;
-import org.chris_martin.delaunay.Mesh.Corner;
-import org.chris_martin.delaunay.Mesh.Swing;
-import org.chris_martin.delaunay.Mesh.VertexConfig;
-import org.chris_martin.delaunay.Mesh.VertexPhysics;
+import org.chris_martin.delaunay.Mesh.*;
 
 import static com.google.common.collect.Lists.newArrayList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
-import static org.chris_martin.delaunay.Geometry.aToB;
-import static org.chris_martin.delaunay.Geometry.angleVec;
-import static org.chris_martin.delaunay.Geometry.xy;
+import static org.chris_martin.delaunay.Geometry.*;
 
 public class Graphics {
 
@@ -46,7 +42,7 @@ public class Graphics {
   static final Color markerColor = transition(foregroundColor, Color.white, 0.5);
   static final Color strokeColor = Color.black;
 
-  static final int numberOfPoints = 100;
+  static final int numberOfPoints = 50;
 
   int fps = 30, physicsPerSecond = 30;
 
@@ -54,6 +50,7 @@ public class Graphics {
   Mesh mesh;
   Random random = new Random();
   JFrame frame;
+  JPanel panel;
   PainterList<Vertex> vertexPainter;
   PainterList<Edge> edgePainter;
   PainterList<Triangle> trianglePainter;
@@ -64,6 +61,10 @@ public class Graphics {
     frame = new JFrame("Triangulation");
     frame.setDefaultCloseOperation(EXIT_ON_CLOSE);
     frame.addKeyListener(new Keying());
+    FlowLayout layout = new FlowLayout(); layout.setVgap(0); layout.setHgap(0);
+    panel = new JPanel(layout);
+    panel.addMouseListener(mousing); panel.addMouseMotionListener(mousing);
+    frame.add(panel);
     restart();
 
     new Timer(1000/fps, new ActionListener() { public void actionPerformed(ActionEvent e) {
@@ -77,8 +78,11 @@ public class Graphics {
   }
 
   void restart() {
-
     mesh = new Mesh(initialPoints());
+    rebuildPainters();
+  }
+
+  void rebuildPainters() {
 
     vertexPainter = painterList();
     for (Mesh.Vertex v : mesh.vertices()) vertexPainter.add(new Vertex(v));
@@ -89,57 +93,42 @@ public class Graphics {
     trianglePainter = painterList();
     for (Mesh.Triangle t : mesh.triangles()) trianglePainter.add(new Triangle(t));
 
-    rebuildPainters();
-  }
-
-  void rebuildPainters() {
-
     final PainterComponent comp = new PainterComponent(
       new Background(), trianglePainter, edgePainter, vertexPainter);
     comp.setPreferredSize(screenSize);
-    comp.addMouseListener(mousing);
-    comp.addMouseMotionListener(mousing);
 
-    frame.getContentPane().removeAll();
-    frame.getContentPane().add(comp);
+    panel.removeAll();
+    panel.add(comp);
     frame.pack();
     frame.setVisible(true);
+    frame.setResizable(false);
   }
 
   class Mousing extends MouseAdapter {
-    Vec a;
+    Vec a; Line motion(MouseEvent e) { Vec b = xy(e); Line motion = a == null ? null : aToB(a, b); a = b; return motion; }
 
     public void mouseMoved(MouseEvent e) {
-      mouseMoved(e, false);
+      Line motion = motion(e);
+      if (motion != null) for (Edge edge : edgePainter.painters) if (Geometry.overlap(motion, edge.line())) edge.flash();
     }
-    public void mouseDragged(MouseEvent e) {
-      mouseMoved(e, true);
-    }
-    void mouseMoved(MouseEvent e, boolean drag) {
-      Vec b = xy(e);
-      if (a != null) {
-        Line motion = aToB(a, b);
-        for (Edge edge : edgePainter.painters) if (Geometry.overlap(motion, edge.line())) {
-          if (drag) {
-            switch (mouseMode) {
-              case SELECT: select(b); break;
-              case DELETE: mesh.remove(edge.meshEdge); rebuildPainters(); break;
-            }
-          } else {
-            edge.flash();
-          }
-        }
+
+    public void mouseDragged(MouseEvent event) {
+      switch (mouseMode) {
+        case SELECT: select(xy(event)); break;
+        case DELETE: Line m = motion(event); if (m != null) {
+          for (Mesh.Edge e : mesh.edges()) if (overlap(e.line(), m)) mesh.remove(e);
+          rebuildPainters();
+        } break;
       }
-      a = b;
     }
-    public void mouseExited(MouseEvent e) {
-      a = null;
-    }
-    public void mousePressed(MouseEvent e) {
-      final Vec p = xy(e);
+
+    public void mouseExited(MouseEvent event) { a = null; }
+
+    public void mousePressed(MouseEvent event) {
+      final Vec p = xy(event);
       switch (mouseMode) {
         case SELECT: select(p); break;
-        case DELETE: Mesh.Triangle t = findTriangle(p); if (t != null) mesh.remove(t); break;
+        case DELETE: Mesh.Triangle t = findTriangle(p); if (t != null) { mesh.remove(t); rebuildPainters(); } break;
       }
     }
     void select(final Vec p) {
@@ -152,7 +141,7 @@ public class Graphics {
   }
 
   public enum MouseMode { SELECT, DELETE, CUT }
-  private MouseMode mouseMode = MouseMode.SELECT;
+  private MouseMode mouseMode = MouseMode.DELETE;
 
   class Keying extends KeyAdapter {
     public void keyPressed(KeyEvent e) {
@@ -217,7 +206,7 @@ public class Graphics {
     public void add(P p) { painters.add(p); }
   }
 
-  private static final int vertex_size = 5;
+  private static final int vertex_size = 15;
   private static final Stroke vertex_stroke = new BasicStroke(2);
   class Vertex implements Painter {
     private final Mesh.Vertex meshVertex; Vertex(Mesh.Vertex meshVertex) { this.meshVertex = meshVertex; }
@@ -226,6 +215,9 @@ public class Graphics {
       Shape s = new Ellipse2D.Double(loc.x() - vertex_size, loc.y() - vertex_size, 2 * vertex_size, 2 * vertex_size);
       g.setPaint(marker!=null&&marker.vertex()==meshVertex ? markerColor : foregroundColor); g.fill(s);
       g.setPaint(strokeColor); g.setStroke(vertex_stroke); g.draw(s);
+      String label = Integer.toString(meshVertex.id());
+      Rectangle2D labelRect = g.getFontMetrics().getStringBounds(label, g);
+      g.drawString(label, (int) (loc.x() - labelRect.getWidth()/2), (int) (loc.y() + labelRect.getHeight()/2));
     }
   }
 

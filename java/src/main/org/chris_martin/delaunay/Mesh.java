@@ -41,10 +41,10 @@ public final class Mesh {
 
   private int previousVertexId;
 
-  private List<Triangle> triangles;
+  List<Triangle> triangles = newArrayList();
   public Collection<Triangle> triangles() { return unmodifiableCollection(triangles); }
 
-  private List<Vertex> vertices;
+  List<Vertex> vertices = newArrayList();
   public Collection<Vertex> vertices() { return unmodifiableCollection(vertices); }
 
   private LoadingCache<Edge, Double> springLength = CacheBuilder.newBuilder().build(
@@ -57,7 +57,20 @@ public final class Mesh {
   private static final double GRAVITY = 0.04;
   private static final double SPRING = .05;
   private static final double INERTIA = 10;
-  private static final double DAMPING = .0001;
+  private static final double DAMPING = .001;
+
+  private boolean meshIsValid() {
+    for (Vertex v : vertices) {
+      assert v.corner.vertex == v;
+      Lists.<Corner>newArrayList(v.corners());
+    }
+    for (Triangle t : triangles) {
+      for (Corner c : t.corners()) {
+        assert vertices.contains(c.vertex);
+      }
+    }
+    return true;
+  }
 
   public void setPoints(Collection<VertexConfig> points) {
     Delaunay d = new Delaunay(points);
@@ -81,7 +94,7 @@ public final class Mesh {
         if (v.physics == VertexPhysics.FREE) {
           Vec accel = xy(0, GRAVITY);
           List<Vertex> adjs = newArrayList();
-          for (Corner c : v.corners()) adjs.add(c.next.vertex);
+          for (Corner c : v.corners()) adjs.add(c.next().vertex());
           Collections.shuffle(adjs);
           for (Vertex adj : adjs) {
             double desiredLength = springLength.getUnchecked(new Edge(v, adj));
@@ -101,17 +114,67 @@ public final class Mesh {
     }
   }
 
-  public void remove(Edge e) { for (Triangle t : e.triangles()) remove(t); }
+  public void remove(Edge e) {
+    if (!vertices.contains(e.a) || !vertices.contains(e.b)) return;
+    for (Triangle t : e.triangles()) remove(t);
+  }
   public void remove(Triangle t) {
-    Corner earCorner = t.earCorner();
-    if (earCorner != null) {
-      earCorner.next.swings.prev.corner.swings.next = earCorner.next.swings.next;
-      earCorner.prev.swings.next.corner.swings.prev = earCorner.prev.swings.prev;
-      vertices.remove(earCorner.vertex);
-    } else {
-      return;
+    for (Corner c : t.corners()) {
+      c.swings.prev.corner.swings.next = new Swing(c.swings.next.corner, true);
+      c.swings.next.corner.swings.prev = new Swing(c.swings.prev.corner, true);
+    }
+    for (Corner c : t.corners()) if (c.vertex.corner == c) c.vertex.corner = c.swings.next.corner;
+    assert meshIsValid();
+    for (Corner c : t.corners()) {
+      if (c.swings.next.corner == c) {
+        vertices.remove(c.vertex);
+      } else {
+        ensureManifold(c.vertex);
+      }
     }
     triangles.remove(t);
+    assert meshIsValid();
+  }
+
+  private void ensureManifold(final Vertex v) {
+    final List<Vertex> resultingVertices = newArrayList(v);
+    new Object() {
+      List<List<Corner>> sections = Lists.newArrayList();
+      List<Corner> currentSection;
+      Corner currentCorner = v.corner;
+      void newSection() { sections.add(currentSection = Lists.<Corner>newArrayList()); }
+      {
+        newSection();
+        do {
+          currentSection.add(currentCorner);
+          Swing swing = currentCorner.swings.next;
+          if (swing.isSuper) newSection();
+          currentCorner = swing.corner;
+        } while (currentCorner != v.corner);
+        sections.get(sections.size()-1).addAll(sections.get(0));
+        sections.remove(0);
+        if (sections.size() == 2) {
+          for (int i = 0; i < 2; i++) {
+            List<Corner> section = sections.get(i);
+            Corner first = section.get(0), last = section.get(section.size()-1);
+            first.swings.prev.corner = last;
+            last.swings.next.corner = first;
+            if (i != 0) {
+              Vertex clone = new Vertex(new VertexConfig(v.loc, v.physics));
+              clone.corner = first;
+              vertices.add(clone);
+              resultingVertices.add(clone);
+              for (Corner c : section) c.vertex = clone;
+            } else {
+              v.corner = first;
+            }
+          }
+        }
+      }
+    };
+    for (Vertex rv : resultingVertices) {
+      assert Lists.<Corner>newArrayList(rv.corners()) != null;
+    }
   }
 
   public enum VertexPhysics { PINNED, FREE }
@@ -134,10 +197,18 @@ public final class Mesh {
       public Iterator<Corner> iterator() { return cornersIter(); } }; }
     public Iterator<Corner> cornersIter() { return new Iterator<Corner>() {
       Corner c = Vertex.this.corner;
+      Set<Corner> visited; { assert (visited = newHashSet()) != null; }
       public boolean hasNext() { return c != null; }
-      public Corner next() { if (c == null) throw new NoSuchElementException();
-        Corner retval = c; c = c.swing().next().corner(); if (c == Vertex.this.corner) c = null; return retval; }
-      public void remove() { throw new UnsupportedOperationException(); }}; }
+      public Corner next() {
+        if (c == null) throw new NoSuchElementException();
+        Corner retval = c;
+        c = c.swings.next.corner;
+        if (c == Vertex.this.corner) c = null;
+        assert visited.add(retval);
+        return retval;
+      }
+      public void remove() { throw new UnsupportedOperationException(); }
+    }; }
   }
 
   public class Corner {
@@ -147,7 +218,7 @@ public final class Mesh {
       this.vertex = vertex; this.triangle = triangle;
       if (vertex.corner == null) vertex.corner = this; }
     public Triangle triangle() { return triangle; }
-    public Vertex vertex() { return vertex; }
+    public Vertex vertex() { assert vertices.contains(vertex); return vertex; }
     public Corner next() { return next; } public Corner prev() { return prev; }
     public Swings swing() { return swings; }
   }
@@ -156,7 +227,11 @@ public final class Mesh {
     public Swing prev() { return prev; } public Swing next() { return next; } }
   public static class Swing {
     private Corner corner; public Corner corner() { return corner; }
-    private boolean isSuper; public boolean isSuper() { return isSuper; } }
+    private boolean isSuper; public boolean isSuper() { return isSuper; }
+    public Swing() {}
+    public Swing(Corner corner, boolean isSuper) { this.corner = corner; this.isSuper = isSuper; }
+    public Swing copy() { Swing x = new Swing(); x.corner = corner; x.isSuper = isSuper; return x; }
+  }
 
   public class Edge {
     private final Vertex a, b;
