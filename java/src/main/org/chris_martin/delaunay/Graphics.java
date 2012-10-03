@@ -28,7 +28,6 @@ import static org.chris_martin.delaunay.Geometry.*;
 public class Graphics {
 
   public static void main(String[] args) {
-    //RepeatingReleasedEventsFixer.install();
     new Graphics();
   }
 
