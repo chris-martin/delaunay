@@ -52,6 +52,15 @@ public class Graphics {
   Corner marker;
   Mousing mousing = new Mousing();
 
+  enum DisplayMode {
+    PRETTY, DEBUG;
+    DisplayMode next() {
+      DisplayMode[] v = DisplayMode.values();
+      return v[(ordinal()+1) % v.length];
+    }
+  }
+  DisplayMode displayMode = DisplayMode.PRETTY;
+
   public Graphics() {
     frame = new JFrame("Triangulation");
     frame.setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -85,7 +94,9 @@ public class Graphics {
   void rebuildPainters() {
 
     vertexPainter = painterList();
-    for (Mesh.Vertex v : mesh.vertices()) vertexPainter.add(new Vertex(v));
+    if (displayMode == DisplayMode.DEBUG) {
+      for (Mesh.Vertex v : mesh.vertices()) vertexPainter.add(new Vertex(v));
+    }
 
     edgePainter = painterList();
     for (Mesh.Edge e : mesh.edges()) edgePainter.add(new Edge(e));
@@ -179,6 +190,7 @@ public class Graphics {
         case '2': mouseMode = MouseMode.DELETE; break;
         case '3': mouseMode = MouseMode.CUT; break;
         case 'q': quit(); break;
+        case 'd': displayMode = displayMode.next(); rebuildPainters(); break;
       }
     }
     Corner markerSwing(Swing swing, boolean allowSuper) {
