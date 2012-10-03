@@ -31,12 +31,11 @@ public class Graphics {
     new Graphics();
   }
 
-  static final Color backgroundColor = new Color(150, 170, 200);
   static final Color foregroundColor = new Color(40, 120, 240);
   static final Color markerColor = transition(foregroundColor, Color.white, 0.5);
   static final Color strokeColor = Color.black;
 
-  static final int numberOfPoints = 20;
+  static final int numberOfPoints = 50;
 
   int fps = 30, physicsPerSecond = 30;
 
@@ -47,7 +46,7 @@ public class Graphics {
   JPanel panel;
   PainterList<Vertex> vertexPainter;
   PainterList<Edge> edgePainter;
-  PainterList<Triangle> trianglePainter;
+  PainterList<Triangle> trianglePainter, triangleOutlinePainter;
   Corner marker;
   Mousing mousing = new Mousing();
 
@@ -93,18 +92,21 @@ public class Graphics {
   void rebuildPainters() {
 
     vertexPainter = painterList();
-    if (displayMode == DisplayMode.DEBUG) {
+    if (displayMode == DisplayMode.DEBUG)
       for (Mesh.Vertex v : mesh.vertices()) vertexPainter.add(new Vertex(v));
-    }
 
     edgePainter = painterList();
-    for (Mesh.Edge e : mesh.edges()) edgePainter.add(new Edge(e));
+    if (displayMode == DisplayMode.DEBUG)
+      for (Mesh.Edge e : mesh.edges()) edgePainter.add(new Edge(e));
 
-    trianglePainter = painterList();
-    for (Mesh.Triangle t : mesh.triangles()) trianglePainter.add(new Triangle(t));
+    trianglePainter = painterList(); triangleOutlinePainter = painterList();
+    for (Mesh.Triangle t : mesh.triangles()) {
+      trianglePainter.add(new Triangle(t, false));
+      triangleOutlinePainter.add(new Triangle(t, true));
+    }
 
     final PainterComponent comp = new PainterComponent(
-      new Background(), trianglePainter, edgePainter, vertexPainter);
+      new Background(), triangleOutlinePainter, trianglePainter, edgePainter, vertexPainter);
     comp.setPreferredSize(screenSize);
 
     panel.removeAll();
@@ -118,8 +120,10 @@ public class Graphics {
     Vec a; Line motion(MouseEvent e) { Vec b = xy(e); Line motion = a == null ? null : aToB(a, b); a = b; return motion; }
 
     public void mouseMoved(MouseEvent e) {
-      Line motion = motion(e);
-      if (motion != null) for (Edge edge : edgePainter.painters) if (Geometry.overlap(motion, edge.line())) edge.flash();
+      if (displayMode == DisplayMode.DEBUG) {
+        Line motion = motion(e);
+        if (motion != null) for (Edge edge : edgePainter.painters) if (Geometry.overlap(motion, edge.line())) edge.flash();
+      }
     }
 
     public void mouseDragged(MouseEvent event) {
@@ -142,6 +146,7 @@ public class Graphics {
     }
     public void mouseReleased(MouseEvent e) {
       mesh.stopCutting();
+      a = null;
     }
     void select(final Vec p) {
       Mesh.Triangle t = findTriangle(p);
@@ -256,20 +261,38 @@ public class Graphics {
   }
 
   class Triangle implements Painter {
-    private final Mesh.Triangle t; Triangle(Mesh.Triangle t) { this.t = t; }
+    private final Mesh.Triangle t;
+    private final Color color;
+    private final boolean outline;
+    Triangle(Mesh.Triangle t, boolean outline) {
+      this.t = t;
+      this.outline = outline;
+      Random r = new Random(t.id());
+      r.nextDouble();
+      color = displayMode == DisplayMode.DEBUG ? foregroundColor
+        : transition(foregroundColor, Color.black, 0.3 + r.nextDouble() * 0.25);
+    }
     public void paint(Graphics2D g) {
       Vec a = t.a().vertex().loc(), b = t.b().vertex().loc(), c = t.c().vertex().loc();
-      g.setColor(marker!=null&&marker.triangle()==t ? markerColor : foregroundColor);
+      g.setColor(marker!=null&&marker.triangle()==t ? markerColor : color);
       Path2D.Double path = new Path2D.Double();
       path.moveTo(a.x(), a.y()); path.lineTo(b.x(), b.y()); path.lineTo(c.x(), c.y());
-      g.fill(path);
+      if (outline) {
+        Stroke s = new BasicStroke(1.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+        g.setStroke(s);
+        path.closePath();
+        g.draw(path);
+      } else {
+        g.fill(path);
+      }
     }
   }
 
-  static class Background implements Painter {
+  class Background implements Painter {
     public void paint(Graphics2D g) {
       Rectangle rect = g.getClipBounds();
-      g.setColor(backgroundColor); g.fillRect(0, 0, rect.width, rect.height);
+      g.setColor(displayMode == DisplayMode.PRETTY ? Color.black : new Color(150, 170, 200));
+      g.fillRect(0, 0, rect.width, rect.height);
     }
   }
 

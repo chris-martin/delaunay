@@ -31,7 +31,7 @@ import static org.testng.collections.Maps.newHashMap;
 
 public final class Mesh {
 
-  private int previousVertexId;
+  private int previousVertexId, previousTriangleId;
 
   List<Triangle> triangles = newArrayList();
   public Collection<Triangle> triangles() { return unmodifiableCollection(triangles); }
@@ -68,6 +68,7 @@ public final class Mesh {
     Delaunay d = new Delaunay(points);
     triangles = d.triangles;
     vertices = d.vertices;
+    lastCutVertex = null;
   }
 
   public Collection<Edge> edges() {
@@ -357,6 +358,8 @@ public final class Mesh {
   }
 
   public class Triangle {
+    private final int id = ++previousTriangleId; public int id() { return id; }
+    public int hashCode() { return id; }
     private final Corner a, b, c;
     public Triangle(Vertex a, Vertex b, Vertex c) {
       this.a = new Corner(a, this); this.b = new Corner(b, this); this.c = new Corner(c, this);
