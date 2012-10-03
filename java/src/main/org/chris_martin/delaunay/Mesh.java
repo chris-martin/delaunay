@@ -16,12 +16,7 @@ import com.google.common.base.Predicate;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Ordering;
+import com.google.common.collect.*;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Side;
 import org.chris_martin.delaunay.Geometry.Vec;
@@ -53,7 +48,7 @@ public final class Mesh {
 
   private static final double GRAVITY = 0.04;
   private static final double SPRING = .05;
-  private static final double INERTIA = 10;
+  private static final double INERTIA = 12;
   private static final double DAMPING = .001;
 
   private boolean meshIsValid() {
@@ -135,6 +130,12 @@ public final class Mesh {
     assert meshIsValid();
   }
 
+  Vertex lastCutVertex;
+
+  public void stopCutting() {
+    lastCutVertex = null;
+  }
+
   public void cut(final Edge e, final Line cut) {
     if (!exists(e)) return;
 
@@ -147,7 +148,7 @@ public final class Mesh {
     springLength.put(new Edge(e.a, nv), springLength.getUnchecked(new Edge(e.a, e.b)) * springFraction);
     springLength.put(new Edge(e.b, nv), springLength.getUnchecked(new Edge(e.a, e.b)) * (1 - springFraction));
 
-    class OldTriangle { Triangle t, x, y; Corner splitCorner;
+    class OldTriangle { Triangle x, y; Corner splitCorner;
       OldTriangle(Triangle t) {
         triangles.remove(t);
         splitCorner = Iterables.find(t.corners(), new Predicate<Corner>() {
@@ -183,10 +184,32 @@ public final class Mesh {
     }
     nv.corner = ots.get(0).x.a;
     assert meshIsValid();
+    /*for (OldTriangle ot : ots) {
+      if (e.line().side(cut.a()) == e.line().side(ot.splitCorner.vertex.loc)) {
+        setSwing(ot.x.a, true);
+        setSwing(ot.y.b, true);
+        ensureManifold(ot.splitCorner.vertex);
+        ensureManifold(nv);
+      }
+    }*/
+    if (lastCutVertex != null) {
+      System.out.println("---");
+      for (Corner c : lastCutVertex.corners()) {
+        if (c.next.vertex == nv) {
+          System.out.println(c);
+          setSwing(c.swings.prev.corner, true);
+          setSwing(c.next, true);
+          ensureManifold(c.vertex);
+          ensureManifold(c.next.vertex);
+          break;
+        }
+      }
+    }
+    lastCutVertex = nv;
+    assert meshIsValid();
   }
 
   private void ensureManifold(final Vertex v) {
-    final List<Vertex> resultingVertices = newArrayList(v);
     new Object() {
       List<List<Corner>> sections = Lists.newArrayList();
       List<Corner> currentSection;
@@ -202,27 +225,38 @@ public final class Mesh {
         } while (currentCorner != v.corner);
         sections.get(sections.size()-1).addAll(sections.get(0));
         sections.remove(0);
-        if (sections.size() == 2) {
-          for (int i = 0; i < 2; i++) {
-            List<Corner> section = sections.get(i);
-            Corner first = section.get(0), last = section.get(section.size()-1);
-            setSwing(last, first);
-            if (i != 0) {
-              Vertex clone = new Vertex(new VertexConfig(v.loc, v.physics));
-              clone.corner = first;
-              vertices.add(clone);
-              resultingVertices.add(clone);
-              for (Corner c : section) c.vertex = clone;
-            } else {
-              v.corner = first;
-            }
-          }
-        }
+        splitNonManifold(v, sections);
       }
     };
+  }
+
+  private List<Vertex> splitNonManifold(Vertex v, List<List<Corner>> sections) {
+    assert Sets.<Corner>newHashSet(Iterables.concat(sections)).size() ==
+      Lists.<Corner>newArrayList(Iterables.concat(sections)).size();
+    List<Vertex> resultingVertices = newArrayList(v);
+    if (sections.size() > 1) {
+      for (int i = 0; i < sections.size(); i++) {
+        List<Corner> section = sections.get(i);
+        Corner first = section.get(0), last = section.get(section.size()-1);
+        setSwing(last, first, true);
+        setSwing(first.next, true);
+        setSwing(last.prev.swings.prev.corner, true);
+        if (i != 0) {
+          Vertex clone = new Vertex(new VertexConfig(v.loc, v.physics));
+          clone.corner = first;
+          vertices.add(clone);
+          resultingVertices.add(clone);
+          for (Corner c : section) c.vertex = clone;
+        } else {
+          v.corner = first;
+        }
+      }
+    }
     for (Vertex rv : resultingVertices) {
+      assert rv.corner.vertex == rv;
       assert Lists.<Corner>newArrayList(rv.corners()) != null;
     }
+    return resultingVertices;
   }
 
   public enum VertexPhysics { PINNED, FREE }
@@ -291,6 +325,10 @@ public final class Mesh {
     setSwing(prev, next);
     prev.swings.next.isSuper = isSuper;
     next.swings.prev.isSuper = isSuper;
+  }
+
+  private static void setSwing(Corner prev, boolean isSuper) {
+    setSwing(prev, prev.swings.next.corner, isSuper);
   }
 
   public class Edge {

@@ -1,12 +1,7 @@
 package org.chris_martin.delaunay;
 
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
+import java.awt.event.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Line2D;
@@ -42,7 +37,7 @@ public class Graphics {
   static final Color markerColor = transition(foregroundColor, Color.white, 0.5);
   static final Color strokeColor = Color.black;
 
-  static final int numberOfPoints = 50;
+  static final int numberOfPoints = 20;
 
   int fps = 30, physicsPerSecond = 30;
 
@@ -75,6 +70,11 @@ public class Graphics {
     new Timer((int) physicsTimeStep, new ActionListener() { public void actionPerformed(ActionEvent e) {
       if (mesh != null) mesh.physics(physicsTimeStep);
     }}).start();
+  }
+
+  void quit() {
+    WindowEvent wev = new WindowEvent(frame, WindowEvent.WINDOW_CLOSING);
+    Toolkit.getDefaultToolkit().getSystemEventQueue().postEvent(wev);
   }
 
   void restart() {
@@ -136,6 +136,9 @@ public class Graphics {
         case DELETE: Mesh.Triangle t = findTriangle(p); if (t != null) { mesh.remove(t); rebuildPainters(); } break;
       }
     }
+    public void mouseReleased(MouseEvent e) {
+      mesh.stopCutting();
+    }
     void select(final Vec p) {
       Mesh.Triangle t = findTriangle(p);
       marker = t == null ? null : Ordering.natural().onResultOf(new Function<Corner, Double>() {
@@ -166,6 +169,7 @@ public class Graphics {
         case '1': mouseMode = MouseMode.SELECT; break;
         case '2': mouseMode = MouseMode.DELETE; break;
         case '3': mouseMode = MouseMode.CUT; break;
+        case 'q': quit(); break;
       }
     }
     Corner markerSwing(Swing swing, boolean allowSuper) {
