@@ -108,6 +108,10 @@ public final class Mesh {
 
   boolean exists(Edge e) { return vertices.contains(e.a) & vertices.contains(e.b); }
 
+  public void remove(Line motion) {
+    for (Mesh.Edge e : edges()) if (overlap(e.line(), motion)) remove(e);
+  }
+
   public void remove(Edge e) {
     if (!exists(e)) return;
     for (Triangle t : e.triangles()) remove(t);
@@ -134,6 +138,19 @@ public final class Mesh {
 
   public void stopCutting() {
     lastCutVertex = null;
+  }
+
+  public void cut(Line cut) {
+    List<Line> ms = Lists.newArrayList(cut);
+    while (ms.get(0).mag() > 1) {
+      List<Line> ms2 = Lists.newArrayList();
+      for (Line $ : ms) {
+        ms2.add(aToB($.a(), $.midpoint()));
+        ms2.add(aToB($.midpoint(), $.b()));
+      }
+      ms = ms2;
+    }
+    for (Line $ : ms) for (Mesh.Edge e : edges()) if (overlap(e.line(), $)) cut(e, $);
   }
 
   public void cut(final Edge e, final Line cut) {

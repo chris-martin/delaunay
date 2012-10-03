@@ -127,23 +127,8 @@ public class Graphics {
       Line m;
       switch (mouseMode) {
         case SELECT: select(xy(event)); break;
-        case DELETE: m = motion(event); if (m != null) {
-          for (Mesh.Edge e : mesh.edges()) if (overlap(e.line(), m)) mesh.remove(e);
-          rebuildPainters();
-        } break;
-        case CUT: m = motion(event); if (m != null) {
-          List<Line> ms = newArrayList(m);
-          while (ms.get(0).mag() > 1) {
-            List<Line> ms2 = newArrayList();
-            for (Line $ : ms) {
-              ms2.add(aToB($.a(), $.midpoint()));
-              ms2.add(aToB($.midpoint(), $.b()));
-            }
-            ms = ms2;
-          }
-          for (Line $ : ms) for (Mesh.Edge e : mesh.edges()) if (overlap(e.line(), $)) mesh.cut(e, $);
-          rebuildPainters();
-        } break;
+        case DELETE: m = motion(event); if (m != null) { mesh.remove(m); rebuildPainters(); } break;
+        case CUT: m = motion(event); if (m != null) { mesh.cut(m); rebuildPainters(); } break;
       }
     }
 
