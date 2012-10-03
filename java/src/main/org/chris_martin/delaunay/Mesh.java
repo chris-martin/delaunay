@@ -184,19 +184,9 @@ public final class Mesh {
     }
     nv.corner = ots.get(0).x.a;
     assert meshIsValid();
-    /*for (OldTriangle ot : ots) {
-      if (e.line().side(cut.a()) == e.line().side(ot.splitCorner.vertex.loc)) {
-        setSwing(ot.x.a, true);
-        setSwing(ot.y.b, true);
-        ensureManifold(ot.splitCorner.vertex);
-        ensureManifold(nv);
-      }
-    }*/
     if (lastCutVertex != null) {
-      System.out.println("---");
       for (Corner c : lastCutVertex.corners()) {
         if (c.next.vertex == nv) {
-          System.out.println(c);
           setSwing(c.swings.prev.corner, true);
           setSwing(c.next, true);
           ensureManifold(c.vertex);
