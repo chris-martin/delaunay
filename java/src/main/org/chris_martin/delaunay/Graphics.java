@@ -6,6 +6,9 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Path2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
+import java.awt.geom.RoundRectangle2D;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
@@ -16,12 +19,15 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 
 import com.google.common.base.Function;
+import com.google.common.base.Throwables;
 import com.google.common.collect.Ordering;
+import com.google.common.io.ByteStreams;
 import org.chris_martin.delaunay.Geometry.Line;
 import org.chris_martin.delaunay.Geometry.Vec;
 import org.chris_martin.delaunay.Mesh.*;
 
 import static com.google.common.collect.Lists.newArrayList;
+import static java.util.Arrays.asList;
 import static javax.swing.WindowConstants.EXIT_ON_CLOSE;
 import static org.chris_martin.delaunay.Geometry.*;
 
@@ -50,6 +56,9 @@ public class Graphics {
   Corner marker;
   Mousing mousing = new Mousing();
 
+  Info info = new Info();
+  boolean showInfo = true;
+
   enum DisplayMode {
     PRETTY, DEBUG;
     DisplayMode next() {
@@ -75,7 +84,7 @@ public class Graphics {
 
     final double physicsTimeStep = 1000./physicsPerSecond;
     new Timer((int) physicsTimeStep, new ActionListener() { public void actionPerformed(ActionEvent e) {
-      if (mesh != null) mesh.physics(physicsTimeStep);
+      if (mesh != null && !showInfo) mesh.physics(physicsTimeStep);
     }}).start();
   }
 
@@ -106,7 +115,7 @@ public class Graphics {
     }
 
     final PainterComponent comp = new PainterComponent(
-      new Background(), triangleOutlinePainter, trianglePainter, edgePainter, vertexPainter);
+      new Background(), triangleOutlinePainter, trianglePainter, edgePainter, vertexPainter, info);
     comp.setPreferredSize(screenSize);
 
     panel.removeAll();
@@ -180,6 +189,7 @@ public class Graphics {
         case '3': mouseMode = MouseMode.CUT; break;
         case 'q': quit(); break;
         case 'd': displayMode = displayMode.next(); rebuildPainters(); break;
+        case ' ': showInfo = !showInfo; break;
       }
     }
     Corner markerSwing(Swing swing, boolean allowSuper) {
@@ -302,5 +312,56 @@ public class Graphics {
       a.getGreen() + (int) (t * (b.getGreen() - a.getGreen())),
       a.getBlue() + (int) (t * (b.getBlue() - a.getBlue()))
     ); }
+
+  class Info implements Painter {
+    final Image chris;
+    {
+      try {
+        chris = Toolkit.getDefaultToolkit().createImage(
+          ByteStreams.toByteArray(Info.class.getResourceAsStream("chris.jpg")));
+      } catch (IOException e) {
+        throw Throwables.propagate(e);
+      }
+    }
+    final Color bgColor = new Color(250, 250, 250);
+    final Font nameFont = new Font("SansSerif", Font.BOLD, 20);
+    final Font emailFont = new Font("Monospaced", Font.PLAIN, 18);
+    final Font instructionFont = new Font("SansSerif", Font.PLAIN, 18);
+    public void paint(Graphics2D g) {
+      if (!showInfo) return;
+      int pad = 20;
+      Shape rect = new RoundRectangle2D.Double(pad, pad,
+        screenSize.width-2*pad, screenSize.height-2*pad,
+        10, 10);
+      g.setColor(bgColor); g.fill(rect);
+      g.drawImage(chris, 580, 50, null);
+      g.setColor(Color.black);
+      g.setFont(nameFont); g.drawString("Christopher Martin", 300, 100);
+      g.setFont(emailFont); g.drawString("chris.martin@gatech.edu", 300, 140);
+      g.setFont(instructionFont);
+      int y = 200;
+      for (String s : asList(
+        "Key commands:",
+        "", "Space bar - Show/hide this help screen",
+        "r - Reset the simulation",
+        "d - Switch between pretty/debug display modes",
+        "3 - Change mouse drag effect to \"cutting\"",
+        "2 - Change mouse drag effect to \"triangle removal\"",
+        "",
+        "In debug mode only:",
+        "",
+        "1 - Set mouse drag to \"corner selection\"",
+        "n - Move to next corner in selected triangle",
+        "p - Move to previous corner in selected triangle",
+        "s - Swing",
+        "u - Unswing",
+        "shift+s - Super-swing",
+        "shift+u - Super-unswing"
+      )) {
+        g.drawString(s, 40, y);
+        y += 20;
+      }
+    }
+  }
 
 }
