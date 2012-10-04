@@ -1,0 +1,68 @@
+<project name="Delaunay">
+  <property environment="env"/>
+  <property name="debug.level" value="source,lines,vars"/>
+  <property name="target" value="1.6"/>
+  <property name="source" value="1.6"/>
+
+  <property name="lib.ver" value="1.0"/>
+  <property name="build.dir" value="build"/>
+  <property name="src.dir" value="src/main"/>
+  <property name="lib.dir" value="lib"/>
+  <property name="classes.dir" value="${build.dir}/classes"/>
+
+  <property name="jar.name" value="Delaunay-${lib.ver}.jar"/>
+  <property name="jar.dir" value="${build.dir}/jar"/>
+  <property name="jar.file" value="${jar.dir}/${jar.name}"/>
+  <property name="jar.deps" location="lib"/>
+
+  <!-- Begin necessary classpath declarations for compilation. -->
+  <path id="project.classpath">
+    <pathelement location="${classes.dir}"/>
+    <path refid="external.jars" />
+  </path>
+
+  <path id="external.jars">
+    <fileset dir="${lib.dir}" includes="**/*.jar"/>
+  </path>
+  <!-- End necessary classpath declarations for compilation. -->
+
+  <!-- Clean. -->
+  <target name="clean">
+    <delete dir="${classes.dir}"/>
+    <delete dir="${jar.dir}"/>
+  </target>
+
+  <!-- Compile the library. -->
+  <target name="build">
+    <!-- Copy the library dependencies. -->
+    <mkdir dir="${classes.dir}"/>
+
+    <echo message="${ant.project.name} : ${ant.file}"/>
+    <javac srcdir="${src.dir}" includes="**" encoding="utf-8"
+           destdir="${classes.dir}" source="${source}" target="${target}"
+           debug="true" debuglevel="${debug.level}"
+           includeantruntime="false">
+      <classpath refid="project.classpath"/>
+    </javac>
+  </target>
+
+  <target name="build-jar" depends="build">
+    <mkdir dir="${jar.dir}"/>
+    <jar destfile="${jar.file}" basedir="${classes.dir}">
+      <fileset dir="${src.dir}"/>
+      <zipfileset includes="**/*.class" src="lib/guava-13.0.1.jar"/>
+      <zipfileset includes="**/*.class" src="lib/testng-6.8.jar"/>
+      <manifest>
+        <attribute name="Main-Class"
+                   value="org.chris_martin.delaunay.Graphics"/>
+      </manifest>
+    </jar>
+  </target>
+
+  <target name="run" depends="build-jar">
+    <exec executable="java">
+      <arg line="-jar ${jar.file}"/>
+    </exec>
+  </target>
+
+</project>
