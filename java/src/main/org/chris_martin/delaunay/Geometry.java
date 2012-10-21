@@ -80,7 +80,7 @@ public final class Geometry {
     XY(double x, double y) { this.x = x; this.y = y; }
     public double x() { return x; }
     public double y() { return y; }
-    public double ang() { if (!hasAng) { ang = atan2(y, x); hasMag = true; } return ang; }
+    public double ang() { if (!hasAng) { ang = atan2(y, x); hasAng = true; } return ang; }
     public double mag() { if (!hasMag) { mag = sqrt(pow(x,2)+pow(y,2)); hasMag = true; } return mag; }
     public XY rot180() { return new XY(-1*x, -1*y); }
     public XY rot90() { return new XY(-1 * y, x); }
