@@ -1,5 +1,5 @@
 from collections import defaultdict
-from itertools import chain, imap, permutations
+from itertools import chain, permutations
 
 import geometry
 
@@ -24,7 +24,7 @@ class Mesh:
     return self._vertices
 
   def edges(self):
-    return set(chain(*imap(lambda t: t.edges(), self._triangles)))
+    return set(chain(*map(lambda t: t.edges(), self._triangles)))
 
 class Edge:
 
@@ -77,7 +77,7 @@ class Triangle:
 
     def corner(v):
       return Corner(triangle = self, vertex = v)
-    self._corners = map(corner, vertices)
+    self._corners = list(map(corner, vertices))
 
   def __getitem__(self, i):
     """Iteration over the three corners."""
@@ -88,11 +88,11 @@ class Triangle:
     return cs[(cs.index(corner) + step) % 3]
 
   def vertices(self):
-    return map(lambda c: c.vertex(), self)
+    return list(map(lambda c: c.vertex(), self))
 
   def edges(self):
     vs = self.vertices()
-    return [ Edge(vs[i], vs[(i+1)%3]) for i in xrange(3) ]
+    return [ Edge(vs[i], vs[(i+1)%3]) for i in range(3) ]
 
   def __eq__(self, other):
     return set(self.vertices()) == set(other.vertices())
@@ -191,7 +191,7 @@ class Delaunay:
     """Do a Delaunay triangulation about the given points."""
     assert len(points) >= 3
     self._triangles = []
-    self._vertices = map(Vertex, points)
+    self._vertices = list(map(Vertex, points))
     self._edges = []
     open_edges = self._open_edges = {}
     first_edge = self.first_edge()
@@ -218,7 +218,8 @@ class Delaunay:
     open_edges = self._open_edges
     append_edge = edges.append
 
-    (edge, previous_vertex) = open_edges.iteritems().next()
+    edge = next(iter(open_edges))
+    previous_vertex = open_edges[edge]
     del open_edges[edge]
     line = edge.line()
     if previous_vertex is None:
@@ -253,7 +254,7 @@ class Delaunay:
       for c in t:
         v2c[c.vertex()].append(c)
 
-    for cs in v2c.itervalues():
+    for cs in v2c.values():
 
       for i in cs:
         for j in cs:

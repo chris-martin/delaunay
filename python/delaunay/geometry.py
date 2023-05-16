@@ -1,5 +1,5 @@
 from array import array
-from itertools import imap, permutations
+from itertools import permutations
 import sys
 geometry = sys.modules[__name__]
 from math import sin, cos, atan2, pi, sqrt, copysign
@@ -63,7 +63,7 @@ def overlap_line_segments(a, b):
   # TODO - return immediately if non-overlap is
   # obvious just by comparing x and y coordinates
 
-  return all(imap(_line_between_segment, abba))
+  return all(map(_line_between_segment, abba))
 
 def intersect_lines(a, b):
   """The intersection of two lines. None or a vector."""
@@ -325,7 +325,7 @@ class Line:
 
   def mid(self):
     """The midpoint of a and b"""
-    return sum(self) / 2
+    return sum(self).__div__(2)
 
   def perp(self):
     """
@@ -428,6 +428,7 @@ class Triangle:
   __slots__ = [ '_points', '_center' ]
 
   def __init__(self, points):
+    points = list(points)
     assert len(points) == 3
     self._points = list(map(vec, points))
     self._center = None

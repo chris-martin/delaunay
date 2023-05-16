@@ -9,7 +9,6 @@ from pygame.sprite import Group, Sprite
 Clock = pygame.time.Clock()
 
 import itertools
-from itertools import imap
 import math
 from numpy import array
 import random
@@ -51,7 +50,7 @@ class VertexSprite(Sprite):
 
 class Edge:
 
-  __slots__ = [ '_edge', '_flash_time' ]
+  __slots__ = [ '_mesh_edge', '_flash_time' ]
 
   def __init__(self, mesh_edge):
     self._mesh_edge = mesh_edge
@@ -102,9 +101,9 @@ class Main:
 
   def restart(self):
     self._M = mesh.Mesh(
-      [self.random_point() for i in xrange(50)]
-      + map(Vec, ( (25, 25), (775, 25), (25, 575), (775, 575),
-          (400, 20), (400, 580), (20, 300), (780, 300) ))
+      [self.random_point() for i in range(50)]
+      + list(map(Vec, ( (25, 25), (775, 25), (25, 575), (775, 575),
+          (400, 20), (400, 580), (20, 300), (780, 300) )))
     )
     self._marker = self._M.triangles()[0][0]
     self._dirty = True
@@ -128,7 +127,7 @@ class Main:
 
   def draw(self):
 
-    if self._dirty or any(imap(lambda e: e.is_dirty(), self._edges)):
+    if self._dirty or any(map(lambda e: e.is_dirty(), self._edges)):
 
       screen = self._screen
       marker = self._marker
